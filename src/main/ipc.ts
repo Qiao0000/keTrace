@@ -13,6 +13,7 @@ import type { Task, TimeBlock, Project, ThesisMeta, ThesisChapter, ThesisLog, Mi
 import { isNonEmptyString, isValidId } from "../shared/schema";
 
 const REPORT_TYPES: ReportType[] = ["daily", "weekly", "monthly"];
+const BOOLEAN_CONFIG_KEYS = ["collectorEnabled", "launchAtLogin", "trayEnabled"] as const;
 
 function isReportType(value: unknown): value is ReportType {
   return REPORT_TYPES.includes(value as ReportType);
@@ -20,6 +21,52 @@ function isReportType(value: unknown): value is ReportType {
 
 function isSafeReportName(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9_.-]+\.md$/.test(value) && !value.includes("..");
+}
+
+function reportTypeFromName(name: string): ReportType | undefined {
+  const prefix = name.split("_", 1)[0];
+  return isReportType(prefix) ? prefix : undefined;
+}
+
+function parseReportCreatedAt(name: string): string {
+  const match = name.match(/_(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})/);
+  if (!match) return "";
+  const [, year, month, day, hour, minute, second] = match;
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
+function sanitizeConfigPatch(patch: unknown): Partial<AppConfig> {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) return {};
+
+  const input = patch as Record<string, unknown>;
+  const safe: Partial<AppConfig> = {};
+
+  if ("pollIntervalSeconds" in input) {
+    const interval = typeof input.pollIntervalSeconds === "number"
+      ? input.pollIntervalSeconds
+      : Number(input.pollIntervalSeconds);
+    if (Number.isFinite(interval)) {
+      safe.pollIntervalSeconds = Math.min(300, Math.max(10, Math.round(interval)));
+    }
+  }
+
+  for (const key of BOOLEAN_CONFIG_KEYS) {
+    if (typeof input[key] === "boolean") safe[key] = input[key];
+  }
+
+  if (input.aiProvider === "deepseek" || input.aiProvider === "none") {
+    safe.aiProvider = input.aiProvider;
+  }
+
+  if (typeof input.deepseekKey === "string") {
+    safe.deepseekKey = input.deepseekKey.trim();
+  }
+
+  if (input.theme === "system" || input.theme === "light" || input.theme === "dark") {
+    safe.theme = input.theme;
+  }
+
+  return safe;
 }
 
 export function registerIpcHandlers(): void {
@@ -280,7 +327,7 @@ export function registerIpcHandlers(): void {
     const html = generateReportHtml(md);
     let summary = "";
 
-    if (options?.useAI) {
+    if (options?.useAI === true) {
       summary = await generateAISummary(md);
     }
 
@@ -296,12 +343,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("report:list", () => {
     if (!existsSync(REPORTS_DIR)) return [];
     return readdirSync(REPORTS_DIR, { withFileTypes: true })
-      .filter((d) => d.isFile() && d.name.endsWith(".md"))
-      .map((d) => ({
-        name: d.name,
-        type: d.name.startsWith("daily") ? "daily" : d.name.startsWith("weekly") ? "weekly" : "monthly",
-        createdAt: d.name.match(/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}/)?.[0]?.replace(/-/g, ":").replace("T", " ") ?? "",
-      }))
+      .filter((d) => d.isFile() && isSafeReportName(d.name) && reportTypeFromName(d.name))
+      .map((d) => {
+        const type = reportTypeFromName(d.name);
+        return {
+          name: d.name,
+          type,
+          createdAt: parseReportCreatedAt(d.name),
+        };
+      })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   });
 
@@ -330,13 +380,18 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("config:save", (_e, patch: Partial<AppConfig>) => {
+    const safePatch = sanitizeConfigPatch(patch);
+    if (Object.keys(safePatch).length === 0) {
+      return { ok: false, error: "invalid config patch", config: loadConfig() };
+    }
+
     createBackup();
     const cfg = loadConfig();
-    const updated = { ...cfg, ...patch };
+    const updated = { ...cfg, ...safePatch };
     saveConfig(updated);
 
     // System behavior wiring
-    if ("collectorEnabled" in patch) {
+    if ("collectorEnabled" in safePatch) {
       if (updated.collectorEnabled) {
         startCollector(updated.pollIntervalSeconds * 1000);
       } else {
@@ -344,12 +399,12 @@ export function registerIpcHandlers(): void {
       }
     }
 
-    if ("pollIntervalSeconds" in patch && updated.collectorEnabled) {
+    if ("pollIntervalSeconds" in safePatch && updated.collectorEnabled) {
       stopCollector();
       startCollector(updated.pollIntervalSeconds * 1000);
     }
 
-    if ("trayEnabled" in patch) {
+    if ("trayEnabled" in safePatch) {
       if (updated.trayEnabled) {
         setupTray();
       } else {
@@ -357,7 +412,7 @@ export function registerIpcHandlers(): void {
       }
     }
 
-    if ("launchAtLogin" in patch) {
+    if ("launchAtLogin" in safePatch) {
       app.setLoginItemSettings({ openAtLogin: updated.launchAtLogin });
     }
 
@@ -369,6 +424,8 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("data:openDir", async (_e, target: "data" | "reports" = "data") => {
+    if (target !== "data" && target !== "reports") return { ok: false, error: "invalid target" };
+
     const path = target === "reports" ? REPORTS_DIR : DATA_DIR;
     await shell.openPath(path);
     return { ok: true, path };

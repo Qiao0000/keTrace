@@ -50,7 +50,7 @@ export function TodayPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <QuickCaptureBar ref={captureRef} />
+      <QuickCaptureBar ref={captureRef} onCaptured={load} />
       {/* 今日日程 */}
       {sortedBlocks.length > 0 && (
         <div className="card">
@@ -65,7 +65,7 @@ export function TodayPage() {
       )}
 
       {/* 今日主线 + 最近活动 双栏 */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div className="today-main-grid">
         <div className="card">
           <div className="card-title">今日主线</div>
           {todayTasks.length === 0 ? (

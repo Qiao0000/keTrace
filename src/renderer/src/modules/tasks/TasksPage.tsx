@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Task, TaskStatus, TimeBlock, Project, Workspace } from "../../../../shared/types";
+import { QuickCaptureBar } from "../../components/QuickCaptureBar";
 
 function genId(prefix: string): string { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function todayStr(): string { return new Date().toISOString().slice(0, 10); }
@@ -10,7 +11,6 @@ export function TasksPage() {
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [filterProject, setFilterProject] = useState("");
-  const [quickInput, setQuickInput] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [feedback, setFeedback] = useState("");
@@ -29,40 +29,6 @@ export function TasksPage() {
   useEffect(() => { loadAll(); }, []);
 
   function msg(s: string) { setFeedback(s); setTimeout(() => setFeedback(""), 2000); }
-
-  // ─── Quick add (parses #project @date !priority) ─────────
-  async function handleQuickAdd() {
-    const input = quickInput.trim();
-    if (!input) return;
-    let text = input;
-    let prio: typeof priority = "normal";
-    let dd: string | undefined;
-    let projName: string | undefined;
-
-    const prioM = text.match(/!(\S+)/);
-    if (prioM) { prio = prioM[1] === "高" || prioM[1] === "high" ? "high" : prioM[1] === "低" || prioM[1] === "low" ? "low" : "normal"; text = text.replace(prioM[0], "").trim(); }
-    const dateM = text.match(/@(\S+)/);
-    if (dateM) { const d = dateM[1]; if (d === "今天" || d === "today") dd = todayStr(); else if (d === "明天") { const t = new Date(); t.setDate(t.getDate() + 1); dd = t.toISOString().slice(0, 10); } else if (/^\d{4}-\d{2}-\d{2}$/.test(d)) dd = d; text = text.replace(dateM[0], "").trim(); }
-    const projM = text.match(/#(\S+)/);
-    if (projM) { projName = projM[1]; text = text.replace(projM[0], "").trim(); }
-
-    if (!text) { setQuickInput(""); return; }
-
-    let pid: string | undefined;
-    if (projName) {
-      const ws: Workspace = await window.rijiAPI.getState();
-      let proj = ws.projects.find((p) => p.name === projName);
-      if (!proj) { const r = await window.rijiAPI.addProject({ id: genId("proj_"), name: projName, createdAt: new Date().toISOString() }); if (r.ok) proj = r.project; }
-      pid = proj?.id;
-    }
-
-    await window.rijiAPI.addTask({ id: genId("task_"), title: text, status: "todo", priority: prio, dueDate: dd, projectId: pid, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-    setQuickInput("");
-    loadAll();
-    const parts = ["已添加"];
-    if (projName) parts.push(`「${projName}」`);
-    msg(parts.join(" "));
-  }
 
   // ─── Full form (for editing) ─────────────────────────────
   function startEdit(t: Task) { setTitle(t.title); setPriority(t.priority); setDueDate(t.dueDate ?? ""); setProjectId(t.projectId ?? ""); setEditId(t.id); setShowForm(true); }
@@ -117,17 +83,16 @@ export function TasksPage() {
   return (
     <div>
       {/* Quick add */}
-      <div className="flex-row" style={{ marginBottom: 16, gap: 8 }}>
-        <div style={{ flex: 1, display: "flex", gap: 0, alignItems: "stretch", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", height: 36, padding: "0 10px" }}>
-          <input className="form-input" style={{ border: "none", background: "transparent", height: "auto", flex: 1, fontSize: 13 }} value={quickInput} onChange={(e) => setQuickInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleQuickAdd()} placeholder="新增任务 #项目 @今天 !高" />
-        </div>
-        <button className="btn btn-primary" onClick={handleQuickAdd}>添加</button>
-        <button className="btn btn-ghost" onClick={() => { resetForm(); setShowForm(!showForm); }}>{showForm ? "收起" : "详情"}</button>
-        <select className="form-select" style={{ width: 130, height: 32 }} value={filterProject} onChange={(e) => { if (e.target.value === "__new__") handleAddProject(); else setFilterProject(e.target.value); }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+        <QuickCaptureBar onCaptured={loadAll} />
+        <div className="flex-row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-ghost" onClick={() => { resetForm(); setShowForm(!showForm); }}>{showForm ? "收起详情" : "详细新增/编辑"}</button>
+          <select className="form-select" style={{ width: 150, height: 32 }} value={filterProject} onChange={(e) => { if (e.target.value === "__new__") handleAddProject(); else setFilterProject(e.target.value); }}>
           <option value="">全部项目</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           <option value="__new__">+ 新建项目…</option>
-        </select>
+          </select>
+        </div>
       </div>
 
       {feedback && <div className="text-muted" style={{ marginBottom: 8 }}>{feedback}</div>}

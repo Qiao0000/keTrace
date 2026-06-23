@@ -6,7 +6,8 @@ import { ThesisPage } from "./modules/thesis/ThesisPage";
 import { ReportsPage } from "./modules/reports/ReportsPage";
 import { InsightsPage } from "./modules/insights/InsightsPage";
 import { SettingsPage } from "./modules/settings/SettingsPage";
-import { focusCapture } from "./captureFocus";
+import { SpotlightCommand } from "./components/SpotlightCommand";
+import appIcon from "./icon.png";
 
 type NavItem = "today" | "activity" | "tasks" | "thesis" | "reports" | "insights" | "settings";
 
@@ -76,6 +77,8 @@ export default function App() {
   const [activeNav, setActiveNav] = useState<NavItem>("today");
   const [mode, setMode] = useState(() => loadTheme().mode);
   const [accent, setAccent] = useState(() => loadTheme().accent);
+  const [spotlightOpen, setSpotlightOpen] = useState(false);
+  const lastCtrlTapRef = useRef(0);
 
   // Apply theme to document
   useEffect(() => {
@@ -88,17 +91,25 @@ export default function App() {
     }
   }, [mode, accent]);
 
-  // Global Cmd/Ctrl+K shortcut — jump to Today and focus capture bar
+  // Double-tap Ctrl — open the command input while the window is focused
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      if (e.key !== "Control" || e.metaKey || e.altKey || e.shiftKey) return;
+      const now = Date.now();
+      if (now - lastCtrlTapRef.current < 420) {
         e.preventDefault();
-        setActiveNav("today");
-        setTimeout(() => focusCapture(), 50);
+        setSpotlightOpen(true);
+        lastCtrlTapRef.current = 0;
+        return;
       }
+      lastCtrlTapRef.current = now;
     };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
+    window.addEventListener("keyup", h);
+    return () => window.removeEventListener("keyup", h);
+  }, []);
+
+  useEffect(() => {
+    return window.rijiAPI.onOpenSpotlight(() => setSpotlightOpen(true));
   }, []);
 
   // Listen for system color scheme changes
@@ -130,7 +141,7 @@ export default function App() {
     <div className="app-layout">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <span className="mark">日</span>
+          <img src={appIcon} className="mark" alt="KeTrace" />
           <span className="name">刻迹</span>
         </div>
 
@@ -175,6 +186,12 @@ export default function App() {
           <PageContent nav={activeNav} />
         </div>
       </main>
+
+      <SpotlightCommand
+        open={spotlightOpen}
+        onClose={() => setSpotlightOpen(false)}
+        onNavigate={(target) => setActiveNav(target)}
+      />
     </div>
   );
 }

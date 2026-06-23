@@ -35,13 +35,12 @@ export function SettingsPage() {
 
   function flash(message: string) {
     setFeedback(message);
-    setTimeout(() => setFeedback(""), 2000);
+    setTimeout(() => setFeedback(""), 2200);
   }
 
   async function save(partial: Partial<AppConfig>) {
-    const updated = { ...config, ...partial };
-    setConfig(updated);
     const res = await window.rijiAPI.saveConfig(partial);
+    setConfig(res.config ?? { ...config, ...partial });
     flash(res.ok ? "已保存" : "保存失败");
     await refreshActivityStatus();
   }
@@ -58,142 +57,165 @@ export function SettingsPage() {
 
   if (loading) return <div className="text-muted">加载中...</div>;
 
+  const lastActivityText = activityStatus?.lastActivity
+    ? new Date(activityStatus.lastActivity.ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+    : "暂无";
+
   return (
-    <div style={{ maxWidth: 560 }}>
-      {/* Activity */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">活动采集</div>
-        <div className="setting-row">
-          <div>
-            <div className="s-label">当前状态</div>
-            <div className="s-desc">
-              {activityStatus?.running ? "采集中" : "未采集"}
-              {activityStatus?.platform ? ` · ${activityStatus.platform}` : ""}
-              {activityStatus?.lastActivity ? ` · 最近 ${new Date(activityStatus.lastActivity.ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : ""}
-              {activityStatus?.lastError ? ` · ${activityStatus.lastError}` : ""}
-            </div>
-          </div>
-          <button className="btn btn-ghost btn-sm" onClick={refreshActivityStatus}>刷新</button>
+    <div className="settings-page">
+      <div className="settings-hero">
+        <div>
+          <div className="settings-eyebrow">本地优先</div>
+          <h3>设置</h3>
+          <p>管理采集、快捷输入、系统行为和本地数据。</p>
         </div>
-        <div className="setting-row">
-          <div>
-            <div className="s-label">采集开关</div>
-            <div className="s-desc">启用后自动记录前台应用与窗口标题</div>
-          </div>
-          <button className={`toggle ${config.collectorEnabled ? "on" : ""}`} onClick={() => save({ collectorEnabled: !config.collectorEnabled })} />
-        </div>
-        <div className="setting-row">
-          <div>
-            <div className="s-label">采集间隔</div>
-            <div className="s-desc">轮询间隔（秒）</div>
-          </div>
-          <div className="flex-row">
-            <input
-              className="form-input"
-              type="number"
-              min={10}
-              max={300}
-              value={draftPollInterval}
-              onChange={(e) => setDraftPollInterval(e.target.value)}
-              onBlur={savePollInterval}
-              style={{ width: 80 }}
-            />
-            <button className="btn btn-ghost btn-sm" onClick={savePollInterval}>保存</button>
-          </div>
-        </div>
+        {feedback && <div className="settings-feedback">{feedback}</div>}
       </div>
 
-      {/* System */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">系统</div>
-        <div className="setting-row">
-          <div>
-            <div className="s-label">系统托盘</div>
-            <div className="s-desc">关闭窗口后保持托盘图标</div>
-          </div>
-          <button className={`toggle ${config.trayEnabled ? "on" : ""}`} onClick={() => save({ trayEnabled: !config.trayEnabled })} />
-        </div>
-        <div className="setting-row">
-          <div>
-            <div className="s-label">开机启动</div>
-            <div className="s-desc">登录时自动启动刻迹</div>
-          </div>
-          <button className={`toggle ${config.launchAtLogin ? "on" : ""}`} onClick={() => save({ launchAtLogin: !config.launchAtLogin })} />
-        </div>
-      </div>
-
-      {/* AI */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">AI 服务</div>
-        <div className="setting-row">
-          <div>
-            <div className="s-label">AI 后端</div>
-            <div className="s-desc">用于生成报告摘要的模型</div>
-          </div>
-          <select className="form-select" style={{ width: 140 }} value={config.aiProvider} onChange={(e) => save({ aiProvider: e.target.value as AppConfig["aiProvider"] })}>
-            <option value="none">不使用</option>
-            <option value="deepseek">DeepSeek</option>
-          </select>
-        </div>
-        {config.aiProvider === "deepseek" && (
-          <div className="setting-row">
+      <div className="settings-grid">
+        <section className="settings-card primary">
+          <div className="settings-card-head">
             <div>
-              <div className="s-label">API Key</div>
-              <div className="s-desc">密钥仅存本地，不经过第三方</div>
+              <h4>活动采集</h4>
+              <p>{activityStatus?.running ? "正在记录前台应用与窗口标题" : "采集已暂停"}</p>
             </div>
-            <div className="flex-row">
+            <button className={`toggle ${config.collectorEnabled ? "on" : ""}`} onClick={() => save({ collectorEnabled: !config.collectorEnabled })} />
+          </div>
+
+          <div className="settings-status-row">
+            <div>
+              <span>状态</span>
+              <strong>{activityStatus?.running ? "采集中" : "未采集"}</strong>
+            </div>
+            <div>
+              <span>平台</span>
+              <strong>{activityStatus?.platform || "-"}</strong>
+            </div>
+            <div>
+              <span>最近活动</span>
+              <strong>{lastActivityText}</strong>
+            </div>
+          </div>
+
+          {activityStatus?.lastError && <div className="settings-warning">{activityStatus.lastError}</div>}
+
+          <div className="settings-inline">
+            <label>
+              <span>采集间隔</span>
               <input
                 className="form-input"
-                type="password"
-                value={draftDeepseekKey}
-                onChange={(e) => setDraftDeepseekKey(e.target.value)}
-                placeholder="sk-..."
-                style={{ width: 240 }}
+                type="number"
+                min={10}
+                max={300}
+                value={draftPollInterval}
+                onChange={(e) => setDraftPollInterval(e.target.value)}
+                onBlur={savePollInterval}
               />
-              <button className="btn btn-ghost btn-sm" onClick={saveDeepseekKey}>保存</button>
+            </label>
+            <button className="btn btn-ghost btn-sm" onClick={savePollInterval}>保存</button>
+            <button className="btn btn-ghost btn-sm" onClick={async () => {
+              await refreshActivityStatus();
+              flash("状态已刷新");
+            }}>刷新</button>
+          </div>
+        </section>
+
+        <section className="settings-card">
+          <div className="settings-card-head">
+            <div>
+              <h4>快捷输入</h4>
+              <p>连按两次 Ctrl 唤出输入框。</p>
+            </div>
+            <span className="shortcut-pill">Ctrl Ctrl</span>
+          </div>
+          <div className="settings-command-list">
+            <span>任务 #项目 @明天 !高</span>
+            <span>论文 写结果 90min 800字</span>
+            <span>投稿 cover letter #期刊</span>
+            <span>生成日报 / 备份 / 打开报告</span>
+          </div>
+        </section>
+
+        <section className="settings-card">
+          <div className="settings-card-head">
+            <div>
+              <h4>系统</h4>
+              <p>菜单栏图标和启动行为。</p>
             </div>
           </div>
-        )}
-      </div>
+          <div className="setting-row compact">
+            <div>
+              <div className="s-label">菜单栏图标</div>
+              <div className="s-desc">可从菜单栏打开刻迹或快速输入</div>
+            </div>
+            <button className={`toggle ${config.trayEnabled ? "on" : ""}`} onClick={() => save({ trayEnabled: !config.trayEnabled })} />
+          </div>
+          <div className="setting-row compact">
+            <div>
+              <div className="s-label">开机启动</div>
+              <div className="s-desc">登录时自动启动刻迹</div>
+            </div>
+            <button className={`toggle ${config.launchAtLogin ? "on" : ""}`} onClick={() => save({ launchAtLogin: !config.launchAtLogin })} />
+          </div>
+        </section>
 
-      {/* Data */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">数据管理</div>
-        <div className="setting-row">
-          <div>
-            <div className="s-label">创建备份</div>
-            <div className="s-desc">备份 workspace.json 和 config.json</div>
+        <section className="settings-card">
+          <div className="settings-card-head">
+            <div>
+              <h4>AI 服务</h4>
+              <p>用于生成报告摘要。</p>
+            </div>
+            <select className="form-select" value={config.aiProvider} onChange={(e) => save({ aiProvider: e.target.value as AppConfig["aiProvider"] })}>
+              <option value="none">不使用</option>
+              <option value="deepseek">DeepSeek</option>
+            </select>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={async () => {
-            const res = await window.rijiAPI.createBackup();
-            setFeedback(res.ok ? "备份已创建" : "备份失败");
-            if (res.ok) setTimeout(() => setFeedback(""), 2000);
-          }}>创建</button>
-        </div>
-        <div className="setting-row">
-          <div>
-            <div className="s-label">数据目录</div>
-            <div className="s-desc">{dataPaths?.dataDir || "读取中..."}</div>
-          </div>
-          <button className="btn btn-ghost btn-sm" onClick={() => window.rijiAPI.openDataDir("data")}>打开</button>
-        </div>
-        <div className="setting-row">
-          <div>
-            <div className="s-label">报告目录</div>
-            <div className="s-desc">{dataPaths?.reportsDir || "读取中..."}</div>
-          </div>
-          <button className="btn btn-ghost btn-sm" onClick={() => window.rijiAPI.openDataDir("reports")}>打开</button>
-        </div>
-        <div className="setting-row">
-          <div>
-            <div className="s-label">数据隐私</div>
-            <div className="s-desc">所有数据默认仅存储在本地，不上传云端</div>
-          </div>
-          <span className="tag tag-done">本地优先</span>
-        </div>
-      </div>
+          {config.aiProvider === "deepseek" && (
+            <div className="settings-inline wide">
+              <label>
+                <span>API Key</span>
+                <input
+                  className="form-input"
+                  type="password"
+                  value={draftDeepseekKey}
+                  onChange={(e) => setDraftDeepseekKey(e.target.value)}
+                  placeholder="sk-..."
+                />
+              </label>
+              <button className="btn btn-ghost btn-sm" onClick={saveDeepseekKey}>保存</button>
+            </div>
+          )}
+        </section>
 
-      {feedback && <div className="text-muted" style={{ textAlign: "center", marginTop: 8 }}>{feedback}</div>}
+        <section className="settings-card data-card">
+          <div className="settings-card-head">
+            <div>
+              <h4>数据管理</h4>
+              <p>数据和报告都保存在本机。</p>
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={async () => {
+              const res = await window.rijiAPI.createBackup();
+              flash(res.ok ? "备份已创建" : "备份失败");
+            }}>创建备份</button>
+          </div>
+          <div className="path-row">
+            <span>数据目录</span>
+            <code>{dataPaths?.dataDir || "读取中..."}</code>
+            <button className="btn btn-ghost btn-sm" onClick={async () => {
+              const res = await window.rijiAPI.openDataDir("data");
+              flash(res.ok ? "已打开数据目录" : "打开失败");
+            }}>打开</button>
+          </div>
+          <div className="path-row">
+            <span>报告目录</span>
+            <code>{dataPaths?.reportsDir || "读取中..."}</code>
+            <button className="btn btn-ghost btn-sm" onClick={async () => {
+              const res = await window.rijiAPI.openDataDir("reports");
+              flash(res.ok ? "已打开报告目录" : "打开失败");
+            }}>打开</button>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

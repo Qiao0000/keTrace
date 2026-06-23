@@ -31,6 +31,7 @@
     "artifactName": "${productName}-${arch}.${ext}",
     "mac": {
       "category": "public.app-category.productivity",
+      "icon": "resources/icons/icon.icns",
       "target": [
         {
           "target": "dmg",
@@ -40,6 +41,7 @@
       "identity": null
     },
     "win": {
+      "icon": "resources/icons/icon.png",
       "target": [
         {
           "target": "nsis",

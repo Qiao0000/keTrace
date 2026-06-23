@@ -14,7 +14,7 @@ function fmtHours(h: number): string {
 
 export function InsightsPage() {
   const [data, setData] = useState<InsightsData | null>(null);
-  const [heatmap, setHeatmap] = useState<{ days: string[]; hours: number[]; grid: number[][] } | null>(null);
+  const [heatmap, setHeatmap] = useState<{ dates?: string[]; days: string[]; hours: number[]; grid: number[][] } | null>(null);
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true);
 
@@ -49,9 +49,9 @@ export function InsightsPage() {
         <StatCard title="活跃投稿" value={data.submissionStages.reduce((s, d) => s + d.count, 0)} subtitle={`${data.submissionStages.length} 个阶段`} color="var(--orange)" />
       </div>
 
-      {/* 1. 时段热力图 */}
+      {/* 1. 日历热力图 */}
       <div className="card">
-        <div className="card-title">时段热力图 · 过去 {days} 天 × 24 小时</div>
+        <div className="card-title">{days === 7 ? "本周活跃日历" : "月度活跃日历"} · 日期颜色越深表示当天越活跃</div>
         {!heatmap || heatmap.grid.length === 0 ? (
           <div className="empty-state" style={{ padding: 24 }}>
             <div className="text-muted">暂无活动数据，开启采集后自动统计</div>

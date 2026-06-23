@@ -33,6 +33,7 @@ export function ActivityPage() {
   const [tab, setTab] = useState<Tab>("log");
   const [collectorOn, setCollectorOn] = useState(false);
   const [config, setConfig] = useState<{ pollIntervalSeconds: number } | null>(null);
+  const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
     window.rijiAPI.getConfig().then((c: { collectorEnabled: boolean; pollIntervalSeconds: number }) => {
@@ -40,6 +41,11 @@ export function ActivityPage() {
       setConfig({ pollIntervalSeconds: c.pollIntervalSeconds });
     });
   }, []);
+
+  function flash(message: string) {
+    setFeedback(message);
+    setTimeout(() => setFeedback(""), 2200);
+  }
 
   useEffect(() => {
     let since: string | undefined;
@@ -61,10 +67,13 @@ export function ActivityPage() {
             {config && collectorOn && <span className="text-muted">{config.pollIntervalSeconds} 秒间隔</span>}
           </div>
           <button className={`btn btn-sm ${collectorOn ? "btn-ghost" : "btn-primary"}`} onClick={async () => {
-            if (collectorOn) { await window.rijiAPI.stopCollector(); setCollectorOn(false); }
-            else { await window.rijiAPI.startCollector(); setCollectorOn(true); }
+            const res = collectorOn ? await window.rijiAPI.stopCollector() : await window.rijiAPI.startCollector();
+            const status = await window.rijiAPI.activityStatus();
+            setCollectorOn(status.running);
+            flash(res.ok ? (status.running ? "采集已开启" : "采集已暂停") : "操作失败");
           }}>{collectorOn ? "暂停" : "开启采集"}</button>
         </div>
+        {feedback && <div className="text-muted" style={{ marginTop: 8 }}>{feedback}</div>}
       </div>
 
       <div className="flex-between" style={{ marginBottom: 16 }}>

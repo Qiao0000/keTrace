@@ -58,8 +58,14 @@ export function ReportsPage() {
       if (res.ok) {
         setOutputHtml(res.html);
         setOutputMd(res.markdown);
+      } else {
+        setFeedback(res.error || "读取失败");
+        setTimeout(() => setFeedback(""), 3000);
       }
-    } catch { setFeedback("读取失败"); }
+    } catch {
+      setFeedback("读取失败");
+      setTimeout(() => setFeedback(""), 3000);
+    }
   }
 
   return (

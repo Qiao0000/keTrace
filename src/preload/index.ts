@@ -50,7 +50,7 @@ const api = {
 
   // Insights
   getInsights: (days?: number) => ipcRenderer.invoke("insights:get", days) as Promise<InsightsData>,
-  getHeatmap: (days?: number) => ipcRenderer.invoke("insights:heatmap", days) as Promise<{ days: string[]; hours: number[]; grid: number[][] }>,
+  getHeatmap: (days?: number) => ipcRenderer.invoke("insights:heatmap", days) as Promise<{ dates?: string[]; days: string[]; topApps?: string[]; hours: number[]; grid: number[][] }>,
 
   // Config
   getConfig: () => ipcRenderer.invoke("config:get"),
@@ -62,6 +62,15 @@ const api = {
   createBackup: () => ipcRenderer.invoke("backup:create"),
   listBackups: () => ipcRenderer.invoke("backup:list"),
   restoreBackup: (tag: string) => ipcRenderer.invoke("backup:restore", tag),
+
+  // Shell events
+  onOpenSpotlight: (handler: () => void) => {
+    const listener = () => handler();
+    ipcRenderer.on("spotlight:open", listener);
+    return () => {
+      ipcRenderer.removeListener("spotlight:open", listener);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld("rijiAPI", api);

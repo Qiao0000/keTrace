@@ -69,7 +69,9 @@ export function gatherInsights(days: number): InsightsData {
 
 // ─── Heatmap ─────────────────────────────────────────────
 export interface HeatmapData {
-  days: string[];         // 7 day labels like ["周一","周二",...]
+  dates: string[];        // ISO date labels like ["2026-06-23", ...]
+  days: string[];         // day labels like ["周一","周二",...]
+  topApps: string[];      // top app per day
   hours: number[];        // 0..23
   grid: number[][];       // 7x24, each cell = minutes of activity in that hour
 }
@@ -77,17 +79,19 @@ export interface HeatmapData {
 export function gatherHeatmap(days: number = 7): HeatmapData {
   const dayNames = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
   const today = new Date();
-  const result: HeatmapData = { days: [], hours: Array.from({ length: 24 }, (_, i) => i), grid: [] };
+  const result: HeatmapData = { dates: [], days: [], topApps: [], hours: Array.from({ length: 24 }, (_, i) => i), grid: [] };
 
   for (let d = days - 1; d >= 0; d--) {
     const date = new Date(today);
     date.setDate(date.getDate() - d);
     const dayOfWeek = (date.getDay() + 6) % 7; // Mon=0
+    const isoDate = date.toISOString().slice(0, 10);
+    result.dates.push(isoDate);
     result.days.push(dayNames[dayOfWeek]);
-    const dateStr = date.toISOString().slice(0, 10);
-    const since = dateStr + "T00:00:00.000Z";
-    const until = dateStr + "T23:59:59.999Z";
+    const since = isoDate + "T00:00:00.000Z";
+    const until = isoDate + "T23:59:59.999Z";
     const records = readActivityRange(since, until).filter((r) => r.event === "state_change");
+    result.topApps.push(computeAppDurations(since, until)[0]?.app ?? "");
 
     const hourBuckets = new Array(24).fill(0) as number[];
     for (let i = 0; i < records.length; i++) {
