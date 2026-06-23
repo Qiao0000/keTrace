@@ -49,6 +49,7 @@ const api = {
 
   // Insights
   getInsights: (days?: number) => ipcRenderer.invoke("insights:get", days) as Promise<InsightsData>,
+  getHeatmap: (days?: number) => ipcRenderer.invoke("insights:heatmap", days) as Promise<{ days: string[]; hours: number[]; grid: number[][] }>,
 
   // Config
   getConfig: () => ipcRenderer.invoke("config:get"),

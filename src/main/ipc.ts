@@ -3,7 +3,7 @@ import { setupTray, destroyTray } from "./tray";
 import { loadConfig, saveConfig, loadWorkspace, saveWorkspace, readActivityRange, computeAppDurations } from "./storage/jsonStore";
 import { createBackup, listBackups, restoreBackup } from "./storage/backup";
 import { generateReportMarkdown, generateReportHtml } from "./report/markdown";
-import { gatherInsights } from "./report/insights";
+import { gatherInsights, gatherHeatmap } from "./report/insights";
 import { generateAISummary } from "./ai/deepseek";
 import { startCollector, stopCollector, isCollectorRunning } from "./collectors";
 import { REPORTS_DIR } from "./storage/paths";

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import type { Task, TaskPriority } from "../../../shared/types";
 import type { Workspace } from "../../../shared/types";
 
@@ -54,11 +54,15 @@ function genId(prefix: string): string {
 }
 
 // ─── Component ──────────────────────────────────────────
-export function QuickCaptureBar() {
+export const QuickCaptureBar = forwardRef<{ focus: () => void }>(function QuickCaptureBar(_props, ref) {
   const [value, setValue] = useState("");
   const [feedback, setFeedback] = useState("");
   const [lastAction, setLastAction] = useState<{ type: string; id: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => { inputRef.current?.focus(); }
+  }));
 
   const showFeedback = useCallback((msg: string, action?: { type: string; id: string }) => {
     setFeedback(msg);
@@ -173,4 +177,4 @@ export function QuickCaptureBar() {
       )}
     </div>
   );
-}
+});

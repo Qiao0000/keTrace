@@ -6,7 +6,6 @@ import { ThesisPage } from "./modules/thesis/ThesisPage";
 import { ReportsPage } from "./modules/reports/ReportsPage";
 import { InsightsPage } from "./modules/insights/InsightsPage";
 import { SettingsPage } from "./modules/settings/SettingsPage";
-import { QuickCaptureBar } from "./components/QuickCaptureBar";
 
 type NavItem = "today" | "activity" | "tasks" | "thesis" | "reports" | "insights" | "settings";
 
@@ -157,9 +156,6 @@ export default function App() {
           <button className="btn btn-ghost btn-sm" onClick={cycleMode} title="切换深浅模式">
             {mode === "dark" ? "🌙" : mode === "light" ? "☀" : "◐"} {modeLabel}
           </button>
-        </div>
-        <div style={{ padding: "10px 28px 6px", borderBottom: "1px solid var(--border)", background: "var(--card)" }}>
-          <QuickCaptureBar />
         </div>
         <div className="page-body">
           <PageContent nav={activeNav} />

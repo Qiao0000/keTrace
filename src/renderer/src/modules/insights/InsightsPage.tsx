@@ -2,28 +2,10 @@ import { useEffect, useState } from "react";
 import type { InsightsData } from "../../../../shared/types";
 import { BarChart } from "../../components/BarChart";
 import { DonutChart } from "../../components/DonutChart";
+import { Heatmap } from "../../components/Heatmap";
 import { StatCard } from "../../components/StatCard";
 
-const APP_COLORS: Record<string, string> = {
-  "Google Chrome": "#3b82f6",
-  Safari: "#06b6d4",
-  "Microsoft Edge": "#10b981",
-  "Visual Studio Code": "#8b5cf6",
-  Terminal: "#64748b",
-  Slack: "#ec4899",
-  "iTerm2": "#64748b",
-  "(AFK)": "#94a3b8",
-};
-
-const STAGE_COLORS: Record<string, string> = {
-  "写作中": "#f59e0b",
-  "待投稿": "#3b82f6",
-  "已投稿": "#8b5cf6",
-  "审稿中": "#ef4444",
-  "返修中": "#ec4899",
-  "已接收": "#10b981",
-  "搁置/拒稿": "#94a3b8",
-};
+const PALETTE = ["var(--accent)", "var(--green)", "var(--orange)", "var(--red)", "var(--purple)", "#ec4899", "#06b6d4", "#84cc16"];
 
 function fmtHours(h: number): string {
   if (h >= 1) return h.toFixed(1) + "h";
@@ -32,15 +14,15 @@ function fmtHours(h: number): string {
 
 export function InsightsPage() {
   const [data, setData] = useState<InsightsData | null>(null);
+  const [heatmap, setHeatmap] = useState<{ days: string[]; hours: number[]; grid: number[][] } | null>(null);
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    window.rijiAPI.getInsights(days).then((d) => {
-      setData(d);
-      setLoading(false);
-    });
+    window.rijiAPI.getInsights(days).then((d) => setData(d));
+    window.rijiAPI.getHeatmap(days > 7 ? 7 : days).then((h) => setHeatmap(h));
+    setLoading(false);
   }, [days]);
 
   if (loading) return <div className="text-muted">加载中...</div>;
@@ -61,26 +43,21 @@ export function InsightsPage() {
 
       {/* Stats row */}
       <div className="flex-row" style={{ gap: 12, flexWrap: "wrap" }}>
-        <StatCard title="追踪时长" value={fmtHours(totalHours)} subtitle={`${days} 天合计`} color="#3b82f6" />
-        <StatCard title="任务完成率" value={`${data.taskStats.rate}%`} subtitle={`${data.taskStats.done}/${data.taskStats.total} 个任务`} color="#10b981" />
-        <StatCard title="论文投入" value={fmtHours(data.thesisMinutes.reduce((s, d) => s + d.minutes, 0) / 60)} subtitle={`${days} 天合计`} color="#8b5cf6" />
-        <StatCard title="活跃投稿" value={data.submissionStages.reduce((s, d) => s + d.count, 0)} subtitle={`${data.submissionStages.length} 个阶段`} color="#ec4899" />
+        <StatCard title="追踪时长" value={fmtHours(totalHours)} subtitle={`${days} 天合计`} color="var(--accent)" />
+        <StatCard title="任务完成率" value={`${data.taskStats.rate}%`} subtitle={`${data.taskStats.done}/${data.taskStats.total} 个任务`} color="var(--green)" />
+        <StatCard title="论文投入" value={fmtHours(data.thesisMinutes.reduce((s, d) => s + d.minutes, 0) / 60)} subtitle={`${days} 天合计`} color="var(--purple)" />
+        <StatCard title="活跃投稿" value={data.submissionStages.reduce((s, d) => s + d.count, 0)} subtitle={`${data.submissionStages.length} 个阶段`} color="var(--orange)" />
       </div>
 
-      {/* 1. 工作时长趋势 */}
+      {/* 1. 时段热力图 */}
       <div className="card">
-        <div className="card-title">工作时长趋势</div>
-        {!hasActivity ? (
+        <div className="card-title">时段热力图 · 过去 {days} 天 × 24 小时</div>
+        {!heatmap || heatmap.grid.length === 0 ? (
           <div className="empty-state" style={{ padding: 24 }}>
             <div className="text-muted">暂无活动数据，开启采集后自动统计</div>
           </div>
         ) : (
-          <BarChart
-            data={data.dailyHours.map((d) => ({ label: d.date, value: d.hours }))}
-            width={Math.min(700, data.dailyHours.length * 40 + 40)}
-            height={160}
-            unit="h"
-          />
+          <Heatmap data={heatmap} size={days > 7 ? 10 : 14} />
         )}
       </div>
 
@@ -95,13 +72,13 @@ export function InsightsPage() {
           ) : (
             <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
               <DonutChart
-                data={data.topApps.map((a) => ({ label: a.app, value: a.seconds, color: APP_COLORS[a.app] }))}
+                data={data.topApps.map((a, i) => ({ label: a.app, value: a.seconds, color: PALETTE[i % PALETTE.length] }))}
                 size={140}
               />
               <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12 }}>
                 {data.topApps.slice(0, 6).map((a, i) => (
                   <div key={a.app} className="flex-row" style={{ gap: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: APP_COLORS[a.app] ?? "#94a3b8", flexShrink: 0 }} />
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: PALETTE[i % PALETTE.length], flexShrink: 0 }} />
                     <span>{a.app}</span>
                     <span className="text-muted">{fmtHours(a.seconds / 3600)}</span>
                   </div>
@@ -121,7 +98,7 @@ export function InsightsPage() {
             </div>
           ) : (
             <BarChart
-              data={data.thesisMinutes.map((d) => ({ label: d.date, value: d.minutes / 60, color: "#8b5cf6" }))}
+              data={data.thesisMinutes.map((d) => ({ label: d.date, value: d.minutes / 60, color: "var(--purple)" }))}
               width={320}
               height={140}
               unit="h"
@@ -140,13 +117,13 @@ export function InsightsPage() {
           ) : (
             <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
               <DonutChart
-                data={data.submissionStages.map((s) => ({ label: s.stage, value: s.count, color: STAGE_COLORS[s.stage] }))}
+                data={data.submissionStages.map((s, i) => ({ label: s.stage, value: s.count, color: PALETTE[i % PALETTE.length] }))}
                 size={130}
               />
               <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12 }}>
-                {data.submissionStages.map((s) => (
+                {data.submissionStages.map((s, i) => (
                   <div key={s.stage} className="flex-row" style={{ gap: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: STAGE_COLORS[s.stage] ?? "#94a3b8", flexShrink: 0 }} />
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: PALETTE[i % PALETTE.length], flexShrink: 0 }} />
                     <span>{s.stage}</span>
                     <span className="text-muted">{s.count}</span>
                   </div>
@@ -172,18 +149,18 @@ export function InsightsPage() {
               </div>
               <div className="flex-between">
                 <span>已完成</span>
-                <strong style={{ color: "#10b981" }}>{data.taskStats.done}</strong>
+                <strong style={{ color: "var(--green)" }}>{data.taskStats.done}</strong>
               </div>
               <div className="flex-between">
                 <span>进行中</span>
-                <strong style={{ color: "#3b82f6" }}>{data.taskStats.total - data.taskStats.done}</strong>
+                <strong style={{ color: "var(--accent)" }}>{data.taskStats.total - data.taskStats.done}</strong>
               </div>
               {/* Progress bar */}
-              <div style={{ marginTop: 4, background: "var(--border)", borderRadius: 6, height: 10, overflow: "hidden" }}>
+              <div style={{ marginTop: 4, background: "var(--card-hover)", borderRadius: 6, height: 10, overflow: "hidden" }}>
                 <div style={{
                   width: `${data.taskStats.rate}%`,
                   height: "100%",
-                  background: `linear-gradient(90deg, #3b82f6, #10b981)`,
+                  background: `var(--accent)`,
                   borderRadius: 6,
                   transition: "width 0.5s",
                 }} />

@@ -66,3 +66,44 @@ export function gatherInsights(days: number): InsightsData {
 
   return { dailyHours, topApps, taskStats: { total: tot, done, rate }, thesisMinutes, submissionStages };
 }
+
+// ─── Heatmap ─────────────────────────────────────────────
+export interface HeatmapData {
+  days: string[];         // 7 day labels like ["周一","周二",...]
+  hours: number[];        // 0..23
+  grid: number[][];       // 7x24, each cell = minutes of activity in that hour
+}
+
+export function gatherHeatmap(days: number = 7): HeatmapData {
+  const dayNames = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+  const today = new Date();
+  const result: HeatmapData = { days: [], hours: Array.from({ length: 24 }, (_, i) => i), grid: [] };
+
+  for (let d = days - 1; d >= 0; d--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - d);
+    const dayOfWeek = (date.getDay() + 6) % 7; // Mon=0
+    result.days.push(dayNames[dayOfWeek]);
+    const dateStr = date.toISOString().slice(0, 10);
+    const since = dateStr + "T00:00:00.000Z";
+    const until = dateStr + "T23:59:59.999Z";
+    const records = readActivityRange(since, until).filter((r) => r.event === "state_change");
+
+    const hourBuckets = new Array(24).fill(0) as number[];
+    for (let i = 0; i < records.length; i++) {
+      const h = new Date(records[i].ts).getHours();
+      // Accumulate: approximate minutes until next record or end of hour
+      if (i < records.length - 1) {
+        const nextTs = new Date(records[i + 1].ts).getTime();
+        const thisTs = new Date(records[i].ts).getTime();
+        const gapMin = Math.min((nextTs - thisTs) / 60000, 60);
+        hourBuckets[h] += gapMin;
+      } else {
+        hourBuckets[h] += 5; // last record: at least 5 min
+      }
+    }
+    result.grid.push(hourBuckets.map((v) => Math.round(v)));
+  }
+
+  return result;
+}

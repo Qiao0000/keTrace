@@ -38,7 +38,7 @@ export function ReportsPage() {
       if (res.summary) setSummary(res.summary);
       setFilePath(res.filePath);
       setActiveReport(null);
-      setFeedback(`报告已保存: ${res.filePath.split("/").pop()}`);
+      setFeedback(`报告已保存`);
       setTimeout(() => setFeedback(""), 3000);
       loadReports();
     } catch (e) {
@@ -63,10 +63,10 @@ export function ReportsPage() {
   }
 
   return (
-    <div style={{ display: "flex", gap: 20, height: "100%" }}>
-      {/* Left: Controls + List */}
-      <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div className="card">
+    <div style={{ display: "flex", gap: 18, height: "calc(100vh - 120px)" }}>
+      {/* Left panel */}
+      <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12, overflow: "hidden" }}>
+        <div className="card" style={{ flexShrink: 0 }}>
           <div className="card-title">生成报告</div>
           <div className="flex-row" style={{ gap: 4, marginBottom: 10 }}>
             {(["daily", "weekly", "monthly"] as ReportType[]).map((t) => (
@@ -76,49 +76,47 @@ export function ReportsPage() {
             ))}
           </div>
           <button className="btn btn-primary" onClick={() => handleGenerate(reportType)} disabled={generating} style={{ width: "100%", justifyContent: "center" }}>
-            {generating ? "生成中…" : `生成${reportType === "daily" ? "日报" : reportType === "weekly" ? "周报" : "月报"}`}
+            {generating ? "生成中…" : "生成报告"}
           </button>
           <div className="flex-row" style={{ marginTop: 8 }}>
             <input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} id="useAI" />
             <label htmlFor="useAI" className="text-muted" style={{ cursor: "pointer", fontSize: 12 }}>AI 摘要</label>
           </div>
-          {feedback && <div className="text-muted" style={{ marginTop: 4, fontSize: 12 }}>{feedback}</div>}
+          {feedback && <div className="text-muted" style={{ marginTop: 6, fontSize: 12 }}>{feedback}</div>}
         </div>
 
-        <div className="card" style={{ flex: 1, overflow: "auto" }}>
-          <div className="card-title">历史报告 ({reports.length})</div>
-          {reports.length === 0 ? (
-            <div className="text-muted" style={{ fontSize: 13 }}>暂无已保存的报告</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {reports.map((r) => (
-                <div
-                  key={r.name}
-                  onClick={() => handleReadReport(r.name)}
-                  className="flex-between"
-                  style={{
-                    padding: "4px 6px",
-                    borderRadius: 4,
-                    cursor: "pointer",
-                    fontSize: 13,
-                    background: activeReport === r.name ? "var(--border)" : "transparent",
-                  }}
-                >
-                  <div>
+        <div className="card" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <div className="card-title" style={{ flexShrink: 0 }}>历史报告 ({reports.length})</div>
+          <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+            {reports.length === 0 ? (
+              <div className="text-muted" style={{ fontSize: 13 }}>暂无</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {reports.map((r) => (
+                  <div
+                    key={r.name}
+                    onClick={() => handleReadReport(r.name)}
+                    style={{
+                      padding: "5px 8px", borderRadius: 6, cursor: "pointer", fontSize: 12,
+                      background: activeReport === r.name ? "var(--accent-bg)" : "transparent",
+                      border: activeReport === r.name ? "1px solid var(--accent-border)" : "1px solid transparent",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}
+                  >
                     <span className={`tag tag-${r.type === "daily" ? "doing" : r.type === "weekly" ? "todo" : "blocked"}`} style={{ marginRight: 4 }}>
                       {r.type === "daily" ? "日" : r.type === "weekly" ? "周" : "月"}
                     </span>
                     {r.name}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Right: Preview */}
-      <div style={{ flex: 1, overflow: "auto" }}>
+      <div style={{ flex: 1, overflow: "auto", minWidth: 0 }}>
         {!outputHtml && !generating && !activeReport && (
           <div className="empty-state">
             <div className="empty-icon">▤</div>
@@ -128,7 +126,7 @@ export function ReportsPage() {
         )}
 
         {summary && (
-          <div className="card" style={{ marginBottom: 16, borderLeft: "3px solid var(--accent)" }}>
+          <div className="card" style={{ marginBottom: 14, borderLeft: "3px solid var(--accent)" }}>
             <div className="card-title">AI 摘要</div>
             <div style={{ fontSize: 14, lineHeight: 1.7 }}>{summary}</div>
           </div>

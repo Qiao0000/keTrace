@@ -1,17 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { Task, TimeBlock, ActivityRecord, Milestone, Submission, ThesisMeta, Workspace } from "../../../../shared/types";
+import { QuickCaptureBar } from "../../components/QuickCaptureBar";
 
 function genId(p: string): string { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function todayStr(): string { return new Date().toISOString().slice(0, 10); }
 function daysFromNow(d: string): number { return Math.ceil((new Date(d).getTime() - new Date(todayStr()).getTime()) / 86400000); }
 
 export function TodayPage() {
+  const captureRef = useRef<{ focus: () => void }>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
   const [recentActivity, setRecentActivity] = useState<ActivityRecord[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [thesisMeta, setThesisMeta] = useState<ThesisMeta>({ title: "" });
+  const [hourBars, setHourBars] = useState<number[]>(new Array(24).fill(0));
   const [refreshKey, setRefreshKey] = useState(0);
 
   function load() {
@@ -23,9 +26,14 @@ export function TodayPage() {
       setThesisMeta(ws.thesis.meta);
     });
     window.rijiAPI.listActivity().then((l: ActivityRecord[]) => setRecentActivity(l.slice(-5).reverse()));
+    window.rijiAPI.getHeatmap(1).then((h) => { if (h && h.grid[0]) setHourBars(h.grid[0]); });
   }
   useEffect(() => { load(); }, [refreshKey]);
   useEffect(() => { const h = () => setRefreshKey((k) => k + 1); window.addEventListener("focus", h); return () => window.removeEventListener("focus", h); }, []);
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); captureRef.current?.focus(); } };
+    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
+  }, []);
 
   async function toggleTask(t: Task) { await window.rijiAPI.updateTask(t.id, { status: t.status === "done" ? "todo" : "done", doneAt: t.status === "done" ? undefined : new Date().toISOString() }); load(); }
   async function schedule(t: Task, min: number) {
@@ -46,6 +54,7 @@ export function TodayPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <QuickCaptureBar ref={captureRef} />
       {/* 今日日程 */}
       {sortedBlocks.length > 0 && (
         <div className="card">
@@ -140,6 +149,32 @@ export function TodayPage() {
           {todayTasks.length > 0 || sortedBlocks.length > 0
             ? `今天 ${todayTasks.length} 个任务 · ${sortedBlocks.length} 个时间块${reminders > 0 ? ` · ${reminders} 项提醒` : ""}`
             : "新的一天，在上方输入框添加任务吧"}
+        </div>
+      </div>
+
+      {/* 今日热力条 */}
+      <div className="card">
+        <div className="flex-row" style={{ gap: 1, alignItems: "flex-end", height: 40 }}>
+          {hourBars.map((min, h) => {
+            const pct = Math.min(100, (min / 60) * 100);
+            return (
+              <div key={h} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                <div
+                  style={{
+                    width: "100%", height: `${Math.max(4, pct)}%`,
+                    background: min > 0 ? "var(--accent)" : "var(--card-hover)",
+                    borderRadius: "2px 2px 0 0", transition: "height .3s",
+                    opacity: min > 0 ? (0.3 + (pct / 100) * 0.7) : 1,
+                  }}
+                  title={`${String(h).padStart(2, "0")}:00 · ${min} 分钟`}
+                />
+                {h % 3 === 0 && <span style={{ fontSize: 9, color: "var(--text-muted)" }}>{h}</span>}
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex-row" style={{ justifyContent: "space-between", marginTop: 4, fontSize: 10, color: "var(--text-muted)" }}>
+          <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span>
         </div>
       </div>
     </div>
