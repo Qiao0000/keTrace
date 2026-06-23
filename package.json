@@ -1,0 +1,58 @@
+{
+  "name": "riji-next",
+  "version": "0.1.0",
+  "description": "Local-first activity, task, thesis and report workbench.",
+  "author": "mymac",
+  "license": "MIT",
+  "type": "module",
+  "main": "out/main/main.js",
+  "scripts": {
+    "dev": "/Users/mymac/Downloads/PawPal/node_modules/.bin/electron-vite dev",
+    "build": "/Users/mymac/Claude/bin/node scripts/clean-out.mjs && /Users/mymac/Downloads/PawPal/node_modules/.bin/electron-vite build",
+    "typecheck": "/Users/mymac/Downloads/PawPal/node_modules/.bin/tsc --noEmit",
+    "dist:mac": "/Users/mymac/Downloads/PawPal/node_modules/.bin/electron-builder --mac",
+    "dist:win": "/Users/mymac/Downloads/PawPal/node_modules/.bin/electron-builder --win"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^39.2.5",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^4.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.4"
+  },
+  "build": {
+    "appId": "com.riji.next",
+    "productName": "日迹 Next",
+    "artifactName": "${productName}-${arch}.${ext}",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        }
+      ],
+      "identity": null
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "!**/.DS_Store"
+    ]
+  }
+}
