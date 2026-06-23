@@ -5,6 +5,7 @@ import { getMainWindow } from "./window";
 let tray: Tray | null = null;
 
 export function setupTray(): void {
+  if (tray) return; // already set up
   const iconPath = join(__dirname, "../../resources/icons/tray-icon.png");
   let icon: NativeImage;
   try {

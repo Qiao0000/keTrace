@@ -1,4 +1,5 @@
-import { ipcMain } from "electron";
+import { ipcMain, app } from "electron";
+import { setupTray, destroyTray } from "./tray";
 import { loadConfig, saveConfig, loadWorkspace, saveWorkspace, readActivityRange, computeAppDurations } from "./storage/jsonStore";
 import { createBackup, listBackups, restoreBackup } from "./storage/backup";
 import { generateReportMarkdown, generateReportHtml } from "./report/markdown";
@@ -303,6 +304,33 @@ export function registerIpcHandlers(): void {
     const cfg = loadConfig();
     const updated = { ...cfg, ...patch };
     saveConfig(updated);
+
+    // System behavior wiring
+    if ("collectorEnabled" in patch) {
+      if (updated.collectorEnabled) {
+        startCollector(updated.pollIntervalSeconds * 1000);
+      } else {
+        stopCollector();
+      }
+    }
+
+    if ("pollIntervalSeconds" in patch && updated.collectorEnabled) {
+      stopCollector();
+      startCollector(updated.pollIntervalSeconds * 1000);
+    }
+
+    if ("trayEnabled" in patch) {
+      if (updated.trayEnabled) {
+        setupTray();
+      } else {
+        destroyTray();
+      }
+    }
+
+    if ("launchAtLogin" in patch) {
+      app.setLoginItemSettings({ openAtLogin: updated.launchAtLogin });
+    }
+
     return { ok: true, config: updated };
   });
 
