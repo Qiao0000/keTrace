@@ -9,6 +9,7 @@ interface ReportFile {
 
 export function ReportsPage() {
   const [generating, setGenerating] = useState(false);
+  const [reportType, setReportType] = useState<ReportType>("daily");
   const [useAI, setUseAI] = useState(false);
   const [outputHtml, setOutputHtml] = useState("");
   const [outputMd, setOutputMd] = useState("");
@@ -67,16 +68,20 @@ export function ReportsPage() {
       <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
         <div className="card">
           <div className="card-title">生成报告</div>
-          <div className="flex-row" style={{ flexWrap: "wrap", gap: 6 }}>
-            <button className="btn btn-primary" onClick={() => handleGenerate("daily")} disabled={generating}>日报</button>
-            <button className="btn btn-primary" onClick={() => handleGenerate("weekly")} disabled={generating}>周报</button>
-            <button className="btn btn-primary" onClick={() => handleGenerate("monthly")} disabled={generating}>月报</button>
+          <div className="flex-row" style={{ gap: 4, marginBottom: 10 }}>
+            {(["daily", "weekly", "monthly"] as ReportType[]).map((t) => (
+              <button key={t} className={`btn btn-sm ${reportType === t ? "btn-primary" : "btn-ghost"}`} onClick={() => setReportType(t)}>
+                {t === "daily" ? "日报" : t === "weekly" ? "周报" : "月报"}
+              </button>
+            ))}
           </div>
+          <button className="btn btn-primary" onClick={() => handleGenerate(reportType)} disabled={generating} style={{ width: "100%", justifyContent: "center" }}>
+            {generating ? "生成中…" : `生成${reportType === "daily" ? "日报" : reportType === "weekly" ? "周报" : "月报"}`}
+          </button>
           <div className="flex-row" style={{ marginTop: 8 }}>
             <input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} id="useAI" />
-            <label htmlFor="useAI" className="text-muted" style={{ cursor: "pointer", fontSize: 13 }}>AI 生成摘要</label>
+            <label htmlFor="useAI" className="text-muted" style={{ cursor: "pointer", fontSize: 12 }}>AI 摘要</label>
           </div>
-          {generating && <div className="text-muted" style={{ marginTop: 8 }}>正在生成{useAI ? " + AI 摘要" : ""}...</div>}
           {feedback && <div className="text-muted" style={{ marginTop: 4, fontSize: 12 }}>{feedback}</div>}
         </div>
 

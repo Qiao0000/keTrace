@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
 import type { Task, TimeBlock, ActivityRecord, Milestone, Submission, ThesisMeta, Workspace } from "../../../../shared/types";
 
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function daysFromNow(dateStr: string): number {
-  const diff = new Date(dateStr).getTime() - new Date(todayStr()).getTime();
-  return Math.ceil(diff / 86400000);
-}
+function genId(p: string): string { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function todayStr(): string { return new Date().toISOString().slice(0, 10); }
+function daysFromNow(d: string): number { return Math.ceil((new Date(d).getTime() - new Date(todayStr()).getTime()) / 86400000); }
 
 export function TodayPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -19,155 +14,132 @@ export function TodayPage() {
   const [thesisMeta, setThesisMeta] = useState<ThesisMeta>({ title: "" });
   const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
+  function load() {
     window.rijiAPI.getState().then((ws: Workspace) => {
       setTasks(ws.tasks.filter((t) => t.status !== "done"));
-      const today = todayStr();
-      setTimeBlocks(ws.timeBlocks.filter((tb) => tb.date === today));
+      setTimeBlocks(ws.timeBlocks.filter((b) => b.date === todayStr()));
       setMilestones(ws.thesis.milestones.filter((m) => !m.done));
       setSubmissions(ws.submissions.filter((s) => s.stage !== "已接收" && s.stage !== "搁置/拒稿"));
       setThesisMeta(ws.thesis.meta);
     });
-    window.rijiAPI.listActivity().then((list: ActivityRecord[]) => {
-      setRecentActivity(list.slice(-5).reverse());
-    });
-  }, [refreshKey]);
+    window.rijiAPI.listActivity().then((l: ActivityRecord[]) => setRecentActivity(l.slice(-5).reverse()));
+  }
+  useEffect(() => { load(); }, [refreshKey]);
+  useEffect(() => { const h = () => setRefreshKey((k) => k + 1); window.addEventListener("focus", h); return () => window.removeEventListener("focus", h); }, []);
 
-  useEffect(() => {
-    const onFocus = () => setRefreshKey((k) => k + 1);
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, []);
+  async function toggleTask(t: Task) { await window.rijiAPI.updateTask(t.id, { status: t.status === "done" ? "todo" : "done", doneAt: t.status === "done" ? undefined : new Date().toISOString() }); load(); }
+  async function schedule(t: Task, min: number) {
+    const h = new Date().getHours(); const sh = h >= 9 && h < 18 ? h + 1 : 9;
+    await window.rijiAPI.addTimeBlock({ id: genId("tb_"), date: todayStr(), start: `${String(sh).padStart(2,"0")}:00`, end: `${String(Math.min(sh + Math.floor(min/60), 23)).padStart(2,"0")}:${String(min%60).padStart(2,"0")}`, title: t.title, taskId: t.id, createdAt: new Date().toISOString() });
+    load();
+  }
+  async function genTask(title: string, proj?: string) {
+    await window.rijiAPI.addTask({ id: genId("task_"), title, status: "todo", priority: "normal", projectId: proj, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    load();
+  }
 
-  const todayTasks = tasks.filter((t) => t.status === "doing" || t.status === "todo");
-  const urgentTasks = tasks.filter((t) => t.priority === "high" && t.status !== "done");
+  const todayTasks = tasks.filter((t) => t.status !== "done");
   const sortedBlocks = [...timeBlocks].sort((a, b) => a.start.localeCompare(b.start));
-
-  // Upcoming reminders
-  const upcomingMilestones = milestones
-    .filter((m) => { const d = daysFromNow(m.date); return d >= 0 && d <= 14; })
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const upcomingDeadlines = submissions
-    .filter((s) => s.deadline && daysFromNow(s.deadline) >= 0 && daysFromNow(s.deadline) <= 30)
-    .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""));
-  const totalReminders = upcomingMilestones.length + upcomingDeadlines.length
-    + (thesisMeta.title ? 1 : 0);
+  const upcomingMs = milestones.filter((m) => { const d = daysFromNow(m.date); return d >= 0 && d <= 14; }).sort((a, b) => a.date.localeCompare(b.date));
+  const upcomingSub = submissions.filter((s) => s.deadline && daysFromNow(s.deadline) >= 0 && daysFromNow(s.deadline) <= 30).sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""));
+  const reminders = upcomingMs.length + upcomingSub.length + (thesisMeta.title ? 1 : 0);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* 今日时间块 */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* 今日日程 */}
       {sortedBlocks.length > 0 && (
         <div className="card">
           <div className="card-title">今日日程</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {sortedBlocks.map((tb) => {
-              const linkedTask = tb.taskId ? tasks.find((t) => t.id === tb.taskId) : null;
-              return (
-                <div key={tb.id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
-                  <span className="text-muted" style={{ minWidth: 85, fontSize: 12, fontVariantNumeric: "tabular-nums" }}>{tb.start} - {tb.end}</span>
-                  <span>{tb.title}</span>
-                  {linkedTask && <span className="tag tag-doing">{linkedTask.title}</span>}
-                </div>
-              );
-            })}
-          </div>
+          {sortedBlocks.map((tb) => (
+            <div key={tb.id} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "3px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
+              <span className="text-muted" style={{ minWidth: 80, fontSize: 12, fontVariantNumeric: "tabular-nums" }}>{tb.start} - {tb.end}</span>
+              <span>{tb.title}</span>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* 今日主线 */}
-      <div className="card">
-        <div className="card-title">今日主线</div>
-        {todayTasks.length === 0 ? (
-          <div className="text-muted">今天还没有任务，去「任务」页添加一个吧</div>
-        ) : (
-          <ul style={{ paddingLeft: 18 }}>
-            {todayTasks.map((t) => (
-              <li key={t.id} style={{ marginBottom: 4 }}>
-                <span className={`tag tag-${t.status}`}>{t.status}</span>{" "}
-                {t.title}
-                {t.dueDate && <span className="text-muted" style={{ marginLeft: 6 }}>— {t.dueDate.slice(0, 10)}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
+      {/* 今日主线 + 最近活动 双栏 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div className="card">
+          <div className="card-title">今日主线</div>
+          {todayTasks.length === 0 ? (
+            <div className="text-muted">今天还没有任务</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {todayTasks.map((t) => (
+                <div key={t.id} className="flex-between" style={{ padding: "3px 0", borderBottom: "1px solid var(--border)", fontSize: 13, gap: 6 }}>
+                  <div className="flex-row" style={{ gap: 6, flex: 1, minWidth: 0 }}>
+                    <input type="checkbox" checked={t.status === "done"} onChange={() => toggleTask(t)} />
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: t.status === "done" ? "line-through" : "none" }}>{t.title}</span>
+                    {t.priority === "high" && <span className="tag tag-blocked">高</span>}
+                  </div>
+                  <div className="flex-row" style={{ gap: 3, flexShrink: 0 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => schedule(t, 30)}>30m</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => schedule(t, 60)}>60m</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-title">最近活动</div>
+          {recentActivity.length === 0 ? (
+            <div className="text-muted">暂无活动</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {recentActivity.map((a) => (
+                <div key={a.id} className="timeline-item" style={{ padding: "4px 0" }}>
+                  <span className="time">{new Date(a.ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="app-tag">{a.app}</span>
+                  <span className="title-text">{a.title || "(无标题)"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* 即将到期 */}
-      <div className="card">
-        <div className="card-title">即将到期</div>
-        {urgentTasks.length === 0 ? (
-          <div className="text-muted">没有即将到期的任务</div>
-        ) : (
-          <ul style={{ paddingLeft: 18 }}>
-            {urgentTasks.map((t) => (
-              <li key={t.id}>
-                {t.title}{" "}
-                {t.dueDate && <span className="text-muted">— {t.dueDate.slice(0, 10)}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* 论文/投稿提醒 */}
-      {totalReminders > 0 && (
+      {/* 提醒 */}
+      {reminders > 0 && (
         <div className="card">
           <div className="card-title">论文/投稿提醒</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {thesisMeta.title && (
-              <div className="flex-row">
+              <div className="flex-row" style={{ gap: 8, fontSize: 13 }}>
                 <span className="tag tag-doing">论文</span>
                 <span>{thesisMeta.title}</span>
-                {thesisMeta.stage && <span className="text-muted">— {thesisMeta.stage}</span>}
-                {thesisMeta.targetDate && <span className="text-muted">(目标: {thesisMeta.targetDate})</span>}
+                {thesisMeta.stage && <span className="text-muted">{thesisMeta.stage}</span>}
               </div>
             )}
-            {upcomingMilestones.map((m) => (
-              <div key={m.id} className="flex-row">
-                <span className="tag tag-blocked">里程碑</span>
-                <span>{m.title}</span>
-                <span className="text-muted">— {m.date} ({daysFromNow(m.date)} 天后)</span>
+            {upcomingMs.map((m) => (
+              <div key={m.id} className="flex-between" style={{ fontSize: 13, padding: "2px 0" }}>
+                <div className="flex-row" style={{ gap: 6 }}>
+                  <span className="tag tag-blocked">里程碑</span><span>{m.title}</span><span className="text-muted">{m.date} ({daysFromNow(m.date)}天)</span>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => genTask(m.title)}>生成任务</button>
               </div>
             ))}
-            {upcomingDeadlines.map((s) => (
-              <div key={s.id} className="flex-row">
-                <span className="tag tag-blocked">投稿截止</span>
-                <span>{s.title}</span>
-                {s.venue && <span className="text-muted">@{s.venue}</span>}
-                {s.deadline && <span className="text-muted">— {s.deadline} ({daysFromNow(s.deadline)} 天后)</span>}
+            {upcomingSub.map((s) => (
+              <div key={s.id} className="flex-between" style={{ fontSize: 13, padding: "2px 0" }}>
+                <div className="flex-row" style={{ gap: 6 }}>
+                  <span className="tag tag-blocked">投稿</span><span>{s.title}</span>{s.deadline && <span className="text-muted">{s.deadline} ({daysFromNow(s.deadline)}天)</span>}
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => genTask(`回复 ${s.title} 审稿意见`)}>下一步</button>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* 最近活动 */}
+      {/* 摘要 */}
       <div className="card">
-        <div className="card-title">最近活动</div>
-        {recentActivity.length === 0 ? (
-          <div className="text-muted">暂无活动记录，开启采集后会自动记录</div>
-        ) : (
-          <ul style={{ paddingLeft: 18, fontSize: 13 }}>
-            {recentActivity.map((a) => (
-              <li key={a.id} style={{ marginBottom: 2 }}>
-                <strong>{a.app}</strong>: {a.title || "(无标题)"}{" "}
-                <span className="text-muted">
-                  {new Date(a.ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* 今日摘要 */}
-      <div className="card">
-        <div className="card-title">今日摘要</div>
-        <div className="text-muted">
+        <div className="text-muted" style={{ fontSize: 13 }}>
           {todayTasks.length > 0 || sortedBlocks.length > 0
-            ? `今天有 ${todayTasks.length} 个任务，${sortedBlocks.length} 个时间块。`
-            : "又是新的一天，去「任务」页规划今天吧。"}
-          {totalReminders > 0 && ` 近期有 ${totalReminders} 项论文/投稿提醒。`}
+            ? `今天 ${todayTasks.length} 个任务 · ${sortedBlocks.length} 个时间块${reminders > 0 ? ` · ${reminders} 项提醒` : ""}`
+            : "新的一天，在上方输入框添加任务吧"}
         </div>
       </div>
     </div>

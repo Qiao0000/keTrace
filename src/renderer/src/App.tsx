@@ -6,6 +6,7 @@ import { ThesisPage } from "./modules/thesis/ThesisPage";
 import { ReportsPage } from "./modules/reports/ReportsPage";
 import { InsightsPage } from "./modules/insights/InsightsPage";
 import { SettingsPage } from "./modules/settings/SettingsPage";
+import { QuickCaptureBar } from "./components/QuickCaptureBar";
 
 type NavItem = "today" | "activity" | "tasks" | "thesis" | "reports" | "insights" | "settings";
 
@@ -36,12 +37,12 @@ const pageTitles: Record<NavItem, string> = {
 };
 
 const ACCENTS = [
-  { key: "default", color: "#6c5ce7", label: "深空紫" },
-  { key: "aurora-green", color: "#00b894", label: "极光绿" },
-  { key: "sunset-orange", color: "#e17055", label: "熔岩橙" },
-  { key: "ocean-blue", color: "#0984e3", label: "深海蓝" },
-  { key: "sakura-pink", color: "#fd79a8", label: "樱花粉" },
-  { key: "charcoal-gray", color: "#636e72", label: "石墨灰" },
+  { key: "default", color: "#2563eb", label: "蓝" },
+  { key: "aurora-green", color: "#059669", label: "绿" },
+  { key: "sunset-orange", color: "#ea580c", label: "橙" },
+  { key: "ocean-blue", color: "#0284c7", label: "青" },
+  { key: "violet", color: "#7c3aed", label: "紫" },
+  { key: "slate", color: "#475569", label: "灰" },
 ];
 
 function PageContent({ nav }: { nav: NavItem }) {
@@ -156,6 +157,9 @@ export default function App() {
           <button className="btn btn-ghost btn-sm" onClick={cycleMode} title="切换深浅模式">
             {mode === "dark" ? "🌙" : mode === "light" ? "☀" : "◐"} {modeLabel}
           </button>
+        </div>
+        <div style={{ padding: "10px 28px 6px", borderBottom: "1px solid var(--border)", background: "var(--card)" }}>
+          <QuickCaptureBar />
         </div>
         <div className="page-body">
           <PageContent nav={activeNav} />

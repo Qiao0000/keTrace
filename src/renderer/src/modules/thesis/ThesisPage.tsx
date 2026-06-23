@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import type { Workspace, ThesisMeta, ThesisChapter, ThesisLog, Milestone, Submission, SubmissionLog, SubmissionStage } from "../../../../shared/types";
+import type { Workspace, ThesisMeta, ThesisChapter, ThesisLog, Milestone, Submission, SubmissionLog, SubmissionStage, Task } from "../../../../shared/types";
 
 function genId(prefix: string): string {
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
+function todayStr(): string { return new Date().toISOString().slice(0, 10); }
 
 type Tab = "thesis" | "submission";
 
@@ -104,6 +105,16 @@ function ThesisPanel() {
     load(); msg("章节已删除");
   }
 
+  async function logChapter(ch: ThesisChapter, minutes: number) {
+    await window.rijiAPI.addThesisLog({ id: genId("thlog_"), date: todayStr(), type: "写作", minutes, note: `写 ${ch.title}`, createdAt: new Date().toISOString() });
+    load(); msg(`已记录 ${minutes} 分钟`);
+  }
+
+  async function genChapterTask(ch: ThesisChapter) {
+    await window.rijiAPI.addTask({ id: genId("task_"), title: `写 ${ch.title}`, status: "todo", priority: "normal", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as Task);
+    load(); msg("已生成任务");
+  }
+
   // ── Milestones ─────────────────────────────────────────
   async function addMilestone() {
     if (!msTitle.trim()) return;
@@ -128,9 +139,42 @@ function ThesisPanel() {
     setLogNote(""); setShowLog(false); load(); msg("推进日志已添加");
   }
 
+  // ── Quick log ───────────────────────────────────────────
+  const [quickLog, setQuickLog] = useState("");
+  const [quickMinutes, setQuickMinutes] = useState(60);
+  const [quickWords, setQuickWords] = useState(0);
+
+  async function handleQuickLog() {
+    if (!quickLog.trim()) return;
+    const parts = quickLog.trim().split(/\s+/);
+    let note = quickLog.trim();
+    let minutes = quickMinutes;
+    let words = quickWords;
+    // Try to extract "90min" or "800字" from end
+    const lastP = parts[parts.length - 1];
+    const minM = lastP?.match(/^(\d+)min$/);
+    const wordM = lastP?.match(/^(\d+)字$/);
+    if (minM) { minutes = parseInt(minM[1]); parts.pop(); note = parts.join(" "); }
+    else if (wordM) { words = parseInt(wordM[1]); parts.pop(); note = parts.join(" "); }
+    if (!note) return;
+    await window.rijiAPI.addThesisLog({ id: genId("thlog_"), date: todayStr(), type: "写作", minutes, words: words || undefined, note, createdAt: new Date().toISOString() });
+    setQuickLog(""); load(); msg("进展已记录");
+  }
+
   // ── Render ─────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Quick log */}
+      <div className="card" style={{ borderLeft: "3px solid var(--accent)" }}>
+        <div className="card-title">记录论文进展</div>
+        <div className="flex-row" style={{ gap: 8 }}>
+          <input className="form-input" value={quickLog} onChange={(e) => setQuickLog(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleQuickLog()} placeholder="写结果部分 90min 800字" style={{ flex: 1 }} />
+          <input className="form-input" type="number" value={quickMinutes} onChange={(e) => setQuickMinutes(Number(e.target.value))} style={{ width: 70 }} placeholder="分钟" />
+          <input className="form-input" type="number" value={quickWords} onChange={(e) => setQuickWords(Number(e.target.value))} style={{ width: 70 }} placeholder="字数" />
+          <button className="btn btn-primary" onClick={handleQuickLog}>记录</button>
+        </div>
+      </div>
+
       {/* Meta */}
       <div className="card">
         <div className="flex-between">
@@ -219,10 +263,12 @@ function ThesisPanel() {
                     <span style={{ textDecoration: ch.status === "done" ? "line-through" : "none" }}>{ch.title}</span>
                     {ch.words ? <span className="text-muted">{ch.words} 字</span> : null}
                   </div>
-                  <div className="flex-row">
+                  <div className="flex-row" style={{ gap: 3 }}>
                     <span className="text-muted">{ch.progress}%</span>
-                    <button className="btn btn-ghost" onClick={() => toggleChapterDone(ch)} style={{ fontSize: 12 }}>{ch.status === "done" ? "↩" : "✓"}</button>
-                    <button className="btn btn-ghost" onClick={() => deleteChapter(ch.id)} style={{ fontSize: 12 }}>×</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => logChapter(ch, 30)} title="记录 30 分钟">30m</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => genChapterTask(ch)} title="生成任务">任务</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => toggleChapterDone(ch)}>{ch.status === "done" ? "↩" : "✓"}</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => deleteChapter(ch.id)} style={{ color: "var(--red)" }}>×</button>
                   </div>
                 </div>
                 <div style={{ background: "var(--border)", borderRadius: 4, height: 4, overflow: "hidden" }}>
@@ -362,9 +408,29 @@ function SubmissionPanel() {
     setLogNote(""); load(); msg("日志已添加");
   }
 
+  // ── Quick log ───────────────────────────────────────────
+  const [quickSubLog, setQuickSubLog] = useState("");
+
+  async function handleQuickSubLog() {
+    if (!quickSubLog.trim()) return;
+    // If no submissions, prompt to create one
+    if (submissions.length === 0) { setFeedback("请先创建投稿项目"); setTimeout(() => setFeedback(""), 2000); return; }
+    await window.rijiAPI.addSubmissionLog(submissions[0].id, { id: genId("sublog_"), date: todayStr(), type: "修改", note: quickSubLog.trim(), createdAt: new Date().toISOString() });
+    setQuickSubLog(""); load(); msg("投稿进展已记录");
+  }
+
   // ── Render: Kanban ─────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Quick log */}
+      <div className="card" style={{ borderLeft: "3px solid var(--purple)" }}>
+        <div className="card-title">记录投稿动作</div>
+        <div className="flex-row" style={{ gap: 8 }}>
+          <input className="form-input" value={quickSubLog} onChange={(e) => setQuickSubLog(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleQuickSubLog()} placeholder="补 cover letter 30min #Nature" style={{ flex: 1 }} />
+          <button className="btn btn-primary" onClick={handleQuickSubLog}>记录</button>
+        </div>
+      </div>
+
       <div className="flex-between">
         <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>+ 新增投稿</button>
         {feedback && <span className="text-muted">{feedback}</span>}

@@ -31,6 +31,15 @@ export function ActivityPage() {
   const [stats, setStats] = useState<AppStat[]>([]);
   const [filter, setFilter] = useState<"all" | "today">("today");
   const [tab, setTab] = useState<Tab>("log");
+  const [collectorOn, setCollectorOn] = useState(false);
+  const [config, setConfig] = useState<{ pollIntervalSeconds: number } | null>(null);
+
+  useEffect(() => {
+    window.rijiAPI.getConfig().then((c: { collectorEnabled: boolean; pollIntervalSeconds: number }) => {
+      setCollectorOn(c.collectorEnabled);
+      setConfig({ pollIntervalSeconds: c.pollIntervalSeconds });
+    });
+  }, []);
 
   useEffect(() => {
     let since: string | undefined;
@@ -43,6 +52,21 @@ export function ActivityPage() {
 
   return (
     <div>
+      {/* Collector status */}
+      <div className="card" style={{ marginBottom: 12, padding: "10px 16px", fontSize: 13 }}>
+        <div className="flex-between">
+          <div className="flex-row" style={{ gap: 10 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: collectorOn ? "var(--green)" : "var(--text-muted)", flexShrink: 0 }} />
+            <span>{collectorOn ? "采集中" : "已暂停"}</span>
+            {config && collectorOn && <span className="text-muted">{config.pollIntervalSeconds} 秒间隔</span>}
+          </div>
+          <button className={`btn btn-sm ${collectorOn ? "btn-ghost" : "btn-primary"}`} onClick={async () => {
+            if (collectorOn) { await window.rijiAPI.stopCollector(); setCollectorOn(false); }
+            else { await window.rijiAPI.startCollector(); setCollectorOn(true); }
+          }}>{collectorOn ? "暂停" : "开启采集"}</button>
+        </div>
+      </div>
+
       <div className="flex-between" style={{ marginBottom: 16 }}>
         <div className="flex-row">
           <button className={`btn ${filter === "today" ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilter("today")}>今天</button>
