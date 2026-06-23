@@ -12,6 +12,16 @@ import { join } from "node:path";
 import type { Task, TimeBlock, Project, ThesisMeta, ThesisChapter, ThesisLog, Milestone, Submission, SubmissionLog, AppConfig, ReportType } from "../shared/types";
 import { isNonEmptyString, isValidId } from "../shared/schema";
 
+const REPORT_TYPES: ReportType[] = ["daily", "weekly", "monthly"];
+
+function isReportType(value: unknown): value is ReportType {
+  return REPORT_TYPES.includes(value as ReportType);
+}
+
+function isSafeReportName(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_.-]+\.md$/.test(value) && !value.includes("..");
+}
+
 export function registerIpcHandlers(): void {
   // ── state ───────────────────────────────────────────
   ipcMain.handle("state:get", () => {
@@ -264,6 +274,8 @@ export function registerIpcHandlers(): void {
 
   // ── report ───────────────────────────────────────────
   ipcMain.handle("report:generate", async (_e, type: ReportType, options?: { date?: string; useAI?: boolean }) => {
+    if (!isReportType(type)) return { ok: false, error: "invalid report type" };
+
     const md = generateReportMarkdown(type, options);
     const html = generateReportHtml(md);
     let summary = "";
@@ -294,6 +306,8 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("report:read", (_e, filename: string) => {
+    if (!isSafeReportName(filename)) return { ok: false, error: "invalid filename" };
+
     const fp = join(REPORTS_DIR, filename);
     if (!existsSync(fp)) return { ok: false, error: "not found" };
     const md = readFileSync(fp, "utf-8");

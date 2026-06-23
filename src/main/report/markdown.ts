@@ -14,6 +14,15 @@ function fmtNum(n: number): string {
   return n.toLocaleString();
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ─── Daily Report ───────────────────────────────────────
 function dailyMarkdown(date?: string): string {
   const data = gatherDailyReport(date);
@@ -206,8 +215,8 @@ export function generateReportMarkdown(type: ReportType, options?: { date?: stri
 }
 
 export function generateReportHtml(md: string): string {
-  // Simple markdown-to-HTML converter for preview
-  let html = md
+  // Escape user content first, then apply the small Markdown subset used by reports.
+  const html = escapeHtml(md)
     .replace(/^### (.+)$/gm, "<h3>$1</h3>")
     .replace(/^## (.+)$/gm, "<h2>$1</h2>")
     .replace(/^# (.+)$/gm, "<h1>$1</h1>")
