@@ -1,4 +1,4 @@
-import type { Project, ReportType, Submission, SubmissionStage, Task, TaskPriority, Workspace } from "../../shared/types";
+import type { JournalTemplateType, Project, ReportType, Submission, SubmissionStage, Task, TaskPriority, Workspace } from "../../shared/types";
 
 export type QuickNavTarget = "today" | "activity" | "tasks" | "thesis" | "reports" | "insights" | "settings";
 
@@ -218,6 +218,22 @@ function parseReportType(input: string): ReportType | undefined {
   return undefined;
 }
 
+function parseJournalTemplateType(input: string): JournalTemplateType | undefined {
+  const text = input.trim();
+  if (/^(日记|日记模板|日复盘|日复盘模板|每日复盘|每日模板)$/i.test(text)) return "day";
+  if (/^(周记|周记模板|周复盘|周复盘模板|每周复盘|每周模板)$/i.test(text)) return "week";
+  if (/^(月记|月记模板|月复盘|月复盘模板|每月复盘|每月模板)$/i.test(text)) return "month";
+  if (/^(年记|年记模板|年复盘|年复盘模板|年度复盘|年度模板)$/i.test(text)) return "year";
+  return undefined;
+}
+
+function journalTemplateLabel(type: JournalTemplateType): string {
+  if (type === "day") return "日记";
+  if (type === "week") return "周记";
+  if (type === "month") return "月记";
+  return "年记";
+}
+
 async function resolveProject(projectName: string | undefined): Promise<Project | undefined> {
   if (!projectName) return undefined;
 
@@ -252,6 +268,11 @@ export function describeQuickAction(input: string): QuickActionPreview {
     return { title: `生成${label}`, detail: "Enter 生成并保存报告" };
   }
 
+  const templateType = parseJournalTemplateType(text);
+  if (templateType) {
+    return { title: `创建${journalTemplateLabel(templateType)}复盘模板`, detail: "Enter 保存到报告历史，可继续编辑填写" };
+  }
+
   if (/^(开始采集|开启采集|启动采集)$/i.test(text)) return { title: "开启活动采集", detail: "Enter 启动前台应用记录" };
   if (/^(停止采集|暂停采集|关闭采集)$/i.test(text)) return { title: "暂停活动采集", detail: "Enter 停止前台应用记录" };
   if (/^(备份|创建备份)$/i.test(text)) return { title: "创建本地备份", detail: "Enter 备份 workspace 和 config" };
@@ -276,6 +297,12 @@ export async function executeQuickAction(input: string): Promise<QuickActionResu
   if (reportType) {
     const res = await window.rijiAPI.generateReport(reportType);
     return { ok: !!res.ok, message: res.ok ? "报告已生成" : "报告生成失败", navigate: "reports" };
+  }
+
+  const templateType = parseJournalTemplateType(text);
+  if (templateType) {
+    const res = await window.rijiAPI.saveTemplate(templateType);
+    return { ok: !!res.ok, message: res.ok ? `${journalTemplateLabel(templateType)}复盘模板已创建` : "模板创建失败", navigate: "reports" };
   }
 
   if (/^(开始采集|开启采集|启动采集)$/i.test(text)) {

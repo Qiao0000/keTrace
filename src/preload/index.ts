@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { Task, TimeBlock, Project, ThesisMeta, ThesisChapter, ThesisLog, Milestone, Submission, SubmissionLog, ReportType, AppConfig, InsightsData, ActivityRecord } from "../shared/types";
+import type { Task, TimeBlock, Project, ThesisMeta, ThesisChapter, ThesisLog, Milestone, Submission, SubmissionLog, ReportType, JournalTemplateType, AppConfig, InsightsData, ActivityRecord } from "../shared/types";
 
 const api = {
   // State
@@ -41,12 +41,15 @@ const api = {
   addSubmission: (sub: Submission) => ipcRenderer.invoke("submission:add", sub),
   updateSubmission: (id: string, patch: Partial<Submission>) => ipcRenderer.invoke("submission:update", id, patch),
   deleteSubmission: (id: string) => ipcRenderer.invoke("submission:delete", id),
+  exportSubmissionMd: (id: string) => ipcRenderer.invoke("submission:exportMd", id) as Promise<{ ok: boolean; markdown: string; filePath: string }>,
   addSubmissionLog: (subId: string, log: SubmissionLog) => ipcRenderer.invoke("submission:addLog", subId, log),
 
   // Reports
   generateReport: (type: ReportType, options?: { date?: string; useAI?: boolean }) => ipcRenderer.invoke("report:generate", type, options),
   listReports: () => ipcRenderer.invoke("report:list"),
   readReport: (filename: string) => ipcRenderer.invoke("report:read", filename),
+  generateTemplate: (type: JournalTemplateType) => ipcRenderer.invoke("template:generate", type),
+  saveTemplate: (type: JournalTemplateType, markdown?: string) => ipcRenderer.invoke("template:save", type, markdown),
 
   // Insights
   getInsights: (days?: number) => ipcRenderer.invoke("insights:get", days) as Promise<InsightsData>,

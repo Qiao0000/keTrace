@@ -161,6 +161,12 @@ function ThesisPanel() {
     setQuickLog(""); load(); msg("进展已记录");
   }
 
+  // ── Overall progress ────────────────────────────────────
+  const msDone = milestones.filter((m) => m.done).length;
+  const msRate = milestones.length > 0 ? msDone / milestones.length : 0;
+  const chAvg = chapters.length > 0 ? chapters.reduce((s, c) => s + c.progress, 0) / chapters.length / 100 : 0;
+  const overall = Math.round((msRate * 0.4 + chAvg * 0.6) * 100);
+
   // ── Render ─────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -174,6 +180,20 @@ function ThesisPanel() {
           <button className="btn btn-primary" onClick={handleQuickLog}>记录</button>
         </div>
       </div>
+
+      {/* Overall progress */}
+      {(milestones.length > 0 || chapters.length > 0) && (
+        <div className="card">
+          <div className="card-title">总体进度 {overall}%</div>
+          <div className="progress-track" style={{ height: 10 }}>
+            <div className="progress-fill" style={{ width: `${overall}%`, background: `color-mix(in srgb, var(--accent) ${overall}%, var(--green))` }} />
+          </div>
+          <div className="flex-row" style={{ justifyContent: "space-between", marginTop: 6, fontSize: 11, color: "var(--text-muted)" }}>
+            <span>里程碑 {msDone}/{milestones.length} · {(msRate * 100).toFixed(0)}% (×40%)</span>
+            <span>章节均进 {(chAvg * 100).toFixed(0)}% (×60%)</span>
+          </div>
+        </div>
+      )}
 
       {/* Meta */}
       <div className="card">
@@ -464,7 +484,10 @@ function SubmissionPanel() {
             <div key={sub.id} className="card" style={{ borderTop: `3px solid var(--accent)` }}>
               <div className="flex-between" style={{ marginBottom: 6 }}>
                 <strong style={{ fontSize: 14 }}>{sub.title}</strong>
-                <button className="btn btn-ghost" onClick={() => deleteSubmission(sub.id)} style={{ fontSize: 12 }}>×</button>
+                <div className="flex-row" style={{ gap: 4 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={async () => { const r = await window.rijiAPI.exportSubmissionMd(sub.id); if (r.ok) msg(`已导出: ${r.filePath.split("/").pop()}`); }} title="导出 Markdown">导出</button>
+                  <button className="btn btn-ghost" onClick={() => deleteSubmission(sub.id)} style={{ fontSize: 12 }}>×</button>
+                </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
                 {sub.venue && <div className="text-muted">投稿: {sub.venue}</div>}

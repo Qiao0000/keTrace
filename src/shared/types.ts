@@ -1,12 +1,15 @@
 // ─── Task ────────────────────────────────────────────────
 export type TaskStatus = "todo" | "doing" | "done" | "blocked";
 export type TaskPriority = "low" | "normal" | "high";
+export type TaskBucket = "must" | "should" | "could" | "";
 
 export interface Task {
   id: string;
   title: string;
   status: TaskStatus;
   priority: TaskPriority;
+  todayBucket?: TaskBucket;
+  estimate?: number;  // minutes
   projectId?: string;
   source?: "manual" | "review" | "thesis" | "submission";
   dueDate?: string;
@@ -147,6 +150,7 @@ export interface AppConfig {
 
 // ─── Reports ─────────────────────────────────────────────
 export type ReportType = "daily" | "weekly" | "monthly";
+export type JournalTemplateType = "day" | "week" | "month" | "year";
 
 export interface ReportMeta {
   id: string;

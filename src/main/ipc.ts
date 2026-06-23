@@ -3,20 +3,26 @@ import { setupTray, destroyTray } from "./tray";
 import { loadConfig, saveConfig, loadWorkspace, saveWorkspace, readActivityRange, computeAppDurations } from "./storage/jsonStore";
 import { createBackup, listBackups, restoreBackup } from "./storage/backup";
 import { generateReportMarkdown, generateReportHtml } from "./report/markdown";
+import { generateJournalTemplate } from "./report/journalTemplates";
 import { gatherInsights, gatherHeatmap } from "./report/insights";
 import { generateAISummary } from "./ai/deepseek";
 import { startCollector, stopCollector, isCollectorRunning, getCollectorStatus } from "./collectors";
 import { DATA_DIR, REPORTS_DIR } from "./storage/paths";
 import { writeFileSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { Task, TimeBlock, Project, ThesisMeta, ThesisChapter, ThesisLog, Milestone, Submission, SubmissionLog, AppConfig, ReportType } from "../shared/types";
+import type { Task, TimeBlock, Project, ThesisMeta, ThesisChapter, ThesisLog, Milestone, Submission, SubmissionLog, AppConfig, ReportType, JournalTemplateType } from "../shared/types";
 import { isNonEmptyString, isValidId } from "../shared/schema";
 
 const REPORT_TYPES: ReportType[] = ["daily", "weekly", "monthly"];
+const JOURNAL_TEMPLATE_TYPES: JournalTemplateType[] = ["day", "week", "month", "year"];
 const BOOLEAN_CONFIG_KEYS = ["collectorEnabled", "launchAtLogin", "trayEnabled"] as const;
 
 function isReportType(value: unknown): value is ReportType {
   return REPORT_TYPES.includes(value as ReportType);
+}
+
+function isJournalTemplateType(value: unknown): value is JournalTemplateType {
+  return JOURNAL_TEMPLATE_TYPES.includes(value as JournalTemplateType);
 }
 
 function isSafeReportName(value: unknown): value is string {
@@ -26,6 +32,11 @@ function isSafeReportName(value: unknown): value is string {
 function reportTypeFromName(name: string): ReportType | undefined {
   const prefix = name.split("_", 1)[0];
   return isReportType(prefix) ? prefix : undefined;
+}
+
+function reportListTypeFromName(name: string): ReportType | "journal" | undefined {
+  if (name.startsWith("journal_")) return "journal";
+  return reportTypeFromName(name);
 }
 
 function parseReportCreatedAt(name: string): string {
@@ -201,6 +212,10 @@ export function registerIpcHandlers(): void {
     createBackup();
     const ws = loadWorkspace();
     ws.thesis.meta = { ...ws.thesis.meta, ...meta };
+    // Auto-create tracking project
+    if (!ws.projects.find((p) => p.name === "博士论文推进")) {
+      ws.projects.push({ id: "proj_thesis_auto", name: "博士论文推进", createdAt: new Date().toISOString() });
+    }
     saveWorkspace(ws);
     return { ok: true, meta: ws.thesis.meta };
   });
@@ -283,6 +298,10 @@ export function registerIpcHandlers(): void {
     createBackup();
     const ws = loadWorkspace();
     ws.submissions.push(sub);
+    // Auto-create tracking project
+    if (!ws.projects.find((p) => p.name === "投稿与发表")) {
+      ws.projects.push({ id: "proj_submission_auto", name: "投稿与发表", createdAt: new Date().toISOString() });
+    }
     saveWorkspace(ws);
     return { ok: true, submission: sub };
   });
@@ -319,6 +338,30 @@ export function registerIpcHandlers(): void {
     return { ok: true };
   });
 
+  ipcMain.handle("submission:exportMd", (_e, id: string) => {
+    const ws = loadWorkspace();
+    const sub = ws.submissions.find((s) => s.id === id);
+    if (!sub) return { ok: false, error: "not found" };
+    const lines = [
+      `# ${sub.title}`,
+      `- 投稿目标: ${sub.venue || "未填写"}`,
+      `- 阶段: ${sub.stage}`,
+      `- 截止日期: ${sub.deadline || "未设置"}`,
+      `- 备注: ${sub.notes || "无"}`,
+      `- 创建: ${sub.createdAt.slice(0, 10)}`,
+      "",
+      "## 推进日志",
+      ...sub.logs.map((l) => `- **${l.date}** [${l.type}] ${l.note}${l.minutes ? ` (${l.minutes}分钟)` : ""}`),
+      "",
+      `> 导出时间: ${new Date().toISOString().slice(0, 19).replace("T", " ")}`,
+    ];
+    const md = lines.join("\n");
+    const filename = `submission_${sub.title.replace(/[^a-zA-Z一-龥]/g, "_").slice(0, 30)}_${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.md`;
+    const filePath = join(REPORTS_DIR, filename);
+    writeFileSync(filePath, md, "utf-8");
+    return { ok: true, markdown: md, filePath };
+  });
+
   // ── report ───────────────────────────────────────────
   ipcMain.handle("report:generate", async (_e, type: ReportType, options?: { date?: string; useAI?: boolean }) => {
     if (!isReportType(type)) return { ok: false, error: "invalid report type" };
@@ -343,9 +386,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("report:list", () => {
     if (!existsSync(REPORTS_DIR)) return [];
     return readdirSync(REPORTS_DIR, { withFileTypes: true })
-      .filter((d) => d.isFile() && isSafeReportName(d.name) && reportTypeFromName(d.name))
+      .filter((d) => d.isFile() && isSafeReportName(d.name) && reportListTypeFromName(d.name))
       .map((d) => {
-        const type = reportTypeFromName(d.name);
+        const type = reportListTypeFromName(d.name);
         return {
           name: d.name,
           type,
@@ -363,6 +406,24 @@ export function registerIpcHandlers(): void {
     const md = readFileSync(fp, "utf-8");
     const html = generateReportHtml(md);
     return { ok: true, markdown: md, html };
+  });
+
+  ipcMain.handle("template:generate", (_e, type: JournalTemplateType) => {
+    if (!isJournalTemplateType(type)) return { ok: false, error: "invalid template type" };
+
+    const markdown = generateJournalTemplate(type);
+    return { ok: true, markdown, html: generateReportHtml(markdown) };
+  });
+
+  ipcMain.handle("template:save", (_e, type: JournalTemplateType, markdown?: string) => {
+    if (!isJournalTemplateType(type)) return { ok: false, error: "invalid template type" };
+
+    const md = typeof markdown === "string" && markdown.trim() ? markdown : generateJournalTemplate(type);
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `journal_${type}_${ts}.md`;
+    const filePath = join(REPORTS_DIR, filename);
+    writeFileSync(filePath, md, "utf-8");
+    return { ok: true, markdown: md, html: generateReportHtml(md), filePath };
   });
 
   // ── insights ─────────────────────────────────────────

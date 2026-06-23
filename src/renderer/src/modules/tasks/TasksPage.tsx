@@ -20,6 +20,8 @@ export function TasksPage() {
   const [priority, setPriority] = useState<"normal" | "high" | "low">("normal");
   const [dueDate, setDueDate] = useState("");
   const [projectId, setProjectId] = useState("");
+  const [todayBucket, setTodayBucket] = useState<"" | "must" | "should" | "could">("");
+  const [estimate, setEstimate] = useState(0);
 
   function loadAll() {
     window.rijiAPI.getState().then((ws: Workspace) => {
@@ -31,15 +33,16 @@ export function TasksPage() {
   function msg(s: string) { setFeedback(s); setTimeout(() => setFeedback(""), 2000); }
 
   // ─── Full form (for editing) ─────────────────────────────
-  function startEdit(t: Task) { setTitle(t.title); setPriority(t.priority); setDueDate(t.dueDate ?? ""); setProjectId(t.projectId ?? ""); setEditId(t.id); setShowForm(true); }
-  function resetForm() { setTitle(""); setPriority("normal"); setDueDate(""); setProjectId(""); setEditId(null); setShowForm(false); }
+  function startEdit(t: Task) { setTitle(t.title); setPriority(t.priority); setDueDate(t.dueDate ?? ""); setProjectId(t.projectId ?? ""); setTodayBucket(t.todayBucket ?? ""); setEstimate(t.estimate ?? 0); setEditId(t.id); setShowForm(true); }
+  function resetForm() { setTitle(""); setPriority("normal"); setDueDate(""); setProjectId(""); setTodayBucket(""); setEstimate(0); setEditId(null); setShowForm(false); }
 
   async function handleSave() {
     if (!title.trim()) return;
+    const base = { title: title.trim(), priority, dueDate: dueDate || undefined, projectId: projectId || undefined, todayBucket: todayBucket || undefined, estimate: estimate || undefined, updatedAt: new Date().toISOString() };
     if (editId) {
-      await window.rijiAPI.updateTask(editId, { title: title.trim(), priority, dueDate: dueDate || undefined, projectId: projectId || undefined, updatedAt: new Date().toISOString() });
+      await window.rijiAPI.updateTask(editId, base);
     } else {
-      await window.rijiAPI.addTask({ id: genId("task_"), title: title.trim(), status: "todo", priority, dueDate: dueDate || undefined, projectId: projectId || undefined, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      await window.rijiAPI.addTask({ id: genId("task_"), status: "todo", ...base, createdAt: new Date().toISOString() });
     }
     resetForm(); loadAll(); msg(editId ? "已更新" : "已添加");
   }
@@ -106,6 +109,10 @@ export function TasksPage() {
             <div className="form-group" style={{ flex: 1 }}><label className="form-label">优先级</label><select className="form-select" value={priority} onChange={(e) => setPriority(e.target.value as typeof priority)}><option value="low">低</option><option value="normal">普通</option><option value="high">高</option></select></div>
             <div className="form-group" style={{ flex: 1 }}><label className="form-label">截止日期</label><input className="form-input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
             <div className="form-group" style={{ flex: 1 }}><label className="form-label">项目</label><select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">无</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+          </div>
+          <div className="flex-row" style={{ gap: 10 }}>
+            <div className="form-group" style={{ flex: 1 }}><label className="form-label">今日桶</label><select className="form-select" value={todayBucket} onChange={(e) => setTodayBucket(e.target.value as typeof todayBucket)}><option value="">未分类</option><option value="must">Must 必须</option><option value="should">Should 应当</option><option value="could">Could 有余力</option></select></div>
+            <div className="form-group" style={{ flex: 1 }}><label className="form-label">预计时间（分钟）</label><input className="form-input" type="number" value={estimate || ""} onChange={(e) => setEstimate(Number(e.target.value))} placeholder="30" /></div>
           </div>
           <div className="flex-row"><button className="btn btn-primary" onClick={handleSave}>{editId ? "更新" : "保存"}</button><button className="btn btn-ghost" onClick={resetForm}>取消</button></div>
         </div>

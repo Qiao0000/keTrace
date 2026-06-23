@@ -43,6 +43,11 @@ export function TodayPage() {
   }
 
   const todayTasks = tasks.filter((t) => t.status !== "done");
+  const mustTasks = todayTasks.filter((t) => t.todayBucket === "must");
+  const shouldTasks = todayTasks.filter((t) => t.todayBucket === "should");
+  const couldTasks = todayTasks.filter((t) => t.todayBucket === "could");
+  const noBucketTasks = todayTasks.filter((t) => !t.todayBucket);
+  const totalEstimate = todayTasks.reduce((s, t) => s + (t.estimate ?? 0), 0);
   const sortedBlocks = [...timeBlocks].sort((a, b) => a.start.localeCompare(b.start));
   const upcomingMs = milestones.filter((m) => { const d = daysFromNow(m.date); return d >= 0 && d <= 14; }).sort((a, b) => a.date.localeCompare(b.date));
   const upcomingSub = submissions.filter((s) => s.deadline && daysFromNow(s.deadline) >= 0 && daysFromNow(s.deadline) <= 30).sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""));
@@ -64,47 +69,60 @@ export function TodayPage() {
         </div>
       )}
 
-      {/* 今日主线 + 最近活动 双栏 */}
-      <div className="today-main-grid">
-        <div className="card">
-          <div className="card-title">今日主线</div>
-          {todayTasks.length === 0 ? (
-            <div className="text-muted">今天还没有任务</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {todayTasks.map((t) => (
-                <div key={t.id} className="flex-between" style={{ padding: "3px 0", borderBottom: "1px solid var(--border)", fontSize: 13, gap: 6 }}>
-                  <div className="flex-row" style={{ gap: 6, flex: 1, minWidth: 0 }}>
-                    <input type="checkbox" checked={t.status === "done"} onChange={() => toggleTask(t)} />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: t.status === "done" ? "line-through" : "none" }}>{t.title}</span>
-                    {t.priority === "high" && <span className="tag tag-blocked">高</span>}
-                  </div>
-                  <div className="flex-row" style={{ gap: 3, flexShrink: 0 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => schedule(t, 30)}>30m</button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => schedule(t, 60)}>60m</button>
-                  </div>
+      {/* 今日主线 */}
+      <div className="card">
+        <div className="flex-between">
+          <div className="card-title" style={{ marginBottom: 0 }}>今日主线</div>
+          {totalEstimate > 0 && <span className="text-muted">{Math.floor(totalEstimate / 60)}h {totalEstimate % 60}m 预计</span>}
+        </div>
+        {todayTasks.length === 0 ? (
+          <div className="text-muted" style={{ marginTop: 8 }}>今天还没有任务</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {[{ label: "Must · 必须完成", tasks: mustTasks, color: "var(--red)" },
+              { label: "Should · 应当完成", tasks: shouldTasks, color: "var(--orange)" },
+              { label: "Could · 有余力再做", tasks: couldTasks, color: "var(--accent)" },
+              { label: "未分类", tasks: noBucketTasks, color: "var(--text-muted)" }]
+              .filter((g) => g.tasks.length > 0)
+              .map((g) => (
+                <div key={g.label}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: g.color, marginBottom: 4, textTransform: "uppercase", letterSpacing: ".5px" }}>{g.label}</div>
+                  {g.tasks.map((t) => (
+                    <div key={t.id} className="flex-between" style={{ padding: "3px 0", borderBottom: "1px solid var(--border)", fontSize: 13, gap: 6 }}>
+                      <div className="flex-row" style={{ gap: 6, flex: 1, minWidth: 0 }}>
+                        <input type="checkbox" checked={t.status === "done"} onChange={() => toggleTask(t)} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: t.status === "done" ? "line-through" : "none" }}>{t.title}</span>
+                        {t.estimate ? <span className="text-muted">{t.estimate}m</span> : null}
+                        {t.priority === "high" && <span className="tag tag-blocked">高</span>}
+                      </div>
+                      <div className="flex-row" style={{ gap: 3, flexShrink: 0 }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => schedule(t, 30)}>30m</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => schedule(t, 60)}>60m</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-        <div className="card">
-          <div className="card-title">最近活动</div>
-          {recentActivity.length === 0 ? (
-            <div className="text-muted">暂无活动</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {recentActivity.map((a) => (
-                <div key={a.id} className="timeline-item" style={{ padding: "4px 0" }}>
-                  <span className="time">{new Date(a.ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>
-                  <span className="app-tag">{a.app}</span>
-                  <span className="title-text">{a.title || "(无标题)"}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* 最近活动 */}
+      <div className="card">
+        <div className="card-title">最近活动</div>
+        {recentActivity.length === 0 ? (
+          <div className="text-muted">暂无活动</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {recentActivity.map((a) => (
+              <div key={a.id} className="timeline-item" style={{ padding: "4px 0" }}>
+                <span className="time">{new Date(a.ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>
+                <span className="app-tag">{a.app}</span>
+                <span className="title-text">{a.title || "(无标题)"}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 提醒 */}
