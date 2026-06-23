@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { TodayPage } from "./modules/today/TodayPage";
 import { ActivityPage } from "./modules/activity/ActivityPage";
 import { TasksPage } from "./modules/tasks/TasksPage";
@@ -6,6 +6,7 @@ import { ThesisPage } from "./modules/thesis/ThesisPage";
 import { ReportsPage } from "./modules/reports/ReportsPage";
 import { InsightsPage } from "./modules/insights/InsightsPage";
 import { SettingsPage } from "./modules/settings/SettingsPage";
+import { focusCapture } from "./captureFocus";
 
 type NavItem = "today" | "activity" | "tasks" | "thesis" | "reports" | "insights" | "settings";
 
@@ -86,6 +87,19 @@ export default function App() {
       document.documentElement.removeAttribute("data-accent");
     }
   }, [mode, accent]);
+
+  // Global Cmd/Ctrl+K shortcut — jump to Today and focus capture bar
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setActiveNav("today");
+        setTimeout(() => focusCapture(), 50);
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
 
   // Listen for system color scheme changes
   useEffect(() => {

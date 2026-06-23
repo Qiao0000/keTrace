@@ -57,7 +57,7 @@ export function InsightsPage() {
             <div className="text-muted">暂无活动数据，开启采集后自动统计</div>
           </div>
         ) : (
-          <Heatmap data={heatmap} size={days > 7 ? 10 : 14} />
+          <Heatmap data={heatmap} />
         )}
       </div>
 

@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useState, useRef, useCallback, forwardRef, useImperativeHandle, useEffect as useMount } from "react";
 import type { Task, TaskPriority } from "../../../shared/types";
 import type { Workspace } from "../../../shared/types";
+import { registerCaptureFocus, unregisterCaptureFocus } from "../captureFocus";
 
 // ─── Parser ─────────────────────────────────────────────
 interface ParsedCapture {
@@ -63,6 +64,11 @@ export const QuickCaptureBar = forwardRef<{ focus: () => void }>(function QuickC
   useImperativeHandle(ref, () => ({
     focus: () => { inputRef.current?.focus(); }
   }));
+
+  useMount(() => {
+    registerCaptureFocus(() => inputRef.current?.focus());
+    return () => unregisterCaptureFocus();
+  });
 
   const showFeedback = useCallback((msg: string, action?: { type: string; id: string }) => {
     setFeedback(msg);

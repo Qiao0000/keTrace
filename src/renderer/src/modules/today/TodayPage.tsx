@@ -30,10 +30,6 @@ export function TodayPage() {
   }
   useEffect(() => { load(); }, [refreshKey]);
   useEffect(() => { const h = () => setRefreshKey((k) => k + 1); window.addEventListener("focus", h); return () => window.removeEventListener("focus", h); }, []);
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); captureRef.current?.focus(); } };
-    window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
-  }, []);
 
   async function toggleTask(t: Task) { await window.rijiAPI.updateTask(t.id, { status: t.status === "done" ? "todo" : "done", doneAt: t.status === "done" ? undefined : new Date().toISOString() }); load(); }
   async function schedule(t: Task, min: number) {
@@ -154,27 +150,29 @@ export function TodayPage() {
 
       {/* 今日热力条 */}
       <div className="card">
-        <div className="flex-row" style={{ gap: 1, alignItems: "flex-end", height: 40 }}>
+        <div className="card-title">今日时段</div>
+        <div className="heatbar">
           {hourBars.map((min, h) => {
-            const pct = Math.min(100, (min / 60) * 100);
+            const maxMin = Math.max(...hourBars, 1);
+            const pct = (min / maxMin) * 100;
             return (
-              <div key={h} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+              <div key={h} className="heatbar-col">
                 <div
+                  className="heatbar-bar"
                   style={{
-                    width: "100%", height: `${Math.max(4, pct)}%`,
+                    height: `${Math.max(4, pct)}%`,
                     background: min > 0 ? "var(--accent)" : "var(--card-hover)",
-                    borderRadius: "2px 2px 0 0", transition: "height .3s",
-                    opacity: min > 0 ? (0.3 + (pct / 100) * 0.7) : 1,
+                    opacity: min > 0 ? 0.35 + (pct / 100) * 0.65 : 1,
                   }}
                   title={`${String(h).padStart(2, "0")}:00 · ${min} 分钟`}
                 />
-                {h % 3 === 0 && <span style={{ fontSize: 9, color: "var(--text-muted)" }}>{h}</span>}
+                {h % 3 === 0 && <span className="heatbar-h">{h}</span>}
               </div>
             );
           })}
         </div>
-        <div className="flex-row" style={{ justifyContent: "space-between", marginTop: 4, fontSize: 10, color: "var(--text-muted)" }}>
-          <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span>
+        <div className="heatbar-time">
+          <span>0h</span><span>12h</span><span>24h</span>
         </div>
       </div>
     </div>

@@ -540,3 +540,64 @@ input[type="checkbox"] {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ═══════════════════════════════════════════════════════════
+   Heatmap (日迹旧版 CSS Grid 风格)
+   ═══════════════════════════════════════════════════════════ */
+.heatmap-wrap { overflow-x: auto; }
+.heatmap {
+  display: grid;
+  grid-template-columns: 44px repeat(24, 1fr);
+  gap: 3px;
+  min-width: 700px;
+}
+.heatmap-h {
+  font-size: 10px; color: var(--text-muted);
+  text-align: center; padding: 4px 0;
+}
+.heatmap-lbl {
+  font-size: 10px; color: var(--text-sec);
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-right: 4px;
+}
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: var(--card-hover);
+  transition: transform .1s;
+  cursor: pointer;
+}
+.heatmap-cell:hover { transform: scale(1.2); z-index: 2; position: relative; }
+.heatmap-cell.hlv0 { background: var(--card-hover); }
+.heatmap-cell.hlv1 { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+.heatmap-cell.hlv2 { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.heatmap-cell.hlv3 { background: color-mix(in srgb, var(--accent) 70%, transparent); }
+.heatmap-cell.hlv4 { background: var(--accent); }
+.heatmap-legend {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 10px; font-size: 11px; color: var(--text-sec);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Today heat bar (compact 24h strip)
+   ═══════════════════════════════════════════════════════════ */
+.heatbar {
+  display: flex; gap: 1px; align-items: flex-end;
+  height: 52px; padding: 0 2px;
+}
+.heatbar-col {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; min-width: 0;
+}
+.heatbar-bar {
+  width: 100%; border-radius: 2px 2px 0 0;
+  transition: height .3s, opacity .3s;
+}
+.heatbar-h {
+  font-size: 9px; color: var(--text-muted);
+  user-select: none;
+}
+.heatbar-time {
+  display: flex; justify-content: space-between;
+  margin-top: 4px; font-size: 10px; color: var(--text-muted);
+}

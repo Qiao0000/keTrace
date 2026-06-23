@@ -1,64 +1,53 @@
 interface Props {
   data: { days: string[]; hours: number[]; grid: number[][] };
-  size?: number;
+  compact?: boolean;
 }
 
-function cellColor(minutes: number): string {
-  if (minutes <= 0) return "var(--card-hover)";
-  if (minutes < 10) return "color-mix(in srgb, var(--accent) 20%, var(--card))";
-  if (minutes < 30) return "color-mix(in srgb, var(--accent) 45%, var(--card))";
-  if (minutes < 60) return "color-mix(in srgb, var(--accent) 70%, var(--card))";
-  return "var(--accent)";
+function cellLevel(minutes: number): number {
+  if (minutes <= 0) return 0;
+  if (minutes < 10) return 1;
+  if (minutes < 30) return 2;
+  if (minutes < 60) return 3;
+  return 4;
 }
 
-export function Heatmap({ data, size = 14 }: Props) {
+export function Heatmap({ data, compact }: Props) {
   if (!data.grid.length) return null;
-  const cs = size + 2;
 
   return (
-    <div style={{ overflow: "auto" }}>
-      <svg
-        width={24 * cs + 50}
-        height={7 * cs + 30}
-        style={{ font: "10px sans-serif" }}
-      >
-        {/* Hour labels */}
-        {data.hours.filter((h) => h % 3 === 0).map((h) => (
-          <text key={h} x={50 + h * cs + cs / 2} y={12} textAnchor="middle" fill="var(--text-muted)" fontSize={9}>
-            {String(h).padStart(2, "0")}
-          </text>
+    <div className="heatmap-wrap">
+      <div className="heatmap">
+        {/* Empty corner + hour labels */}
+        <div className="heatmap-lbl" />
+        {data.hours.map((h) => (
+          <div key={h} className="heatmap-h">{h % 3 === 0 ? h : ""}</div>
         ))}
 
         {/* Rows */}
         {data.grid.map((row, di) => (
-          <g key={di}>
-            <text x={0} y={28 + di * cs + cs / 2 + 3} fill="var(--text-sec)" fontSize={10} textAnchor="end" style={{ width: 44 }}>
-              {data.days[di]}
-            </text>
-            {row.map((val, hi) => (
-              <rect
-                key={hi}
-                x={50 + hi * cs}
-                y={20 + di * cs}
-                width={size}
-                height={size}
-                rx={3}
-                fill={cellColor(val)}
-                style={{ cursor: "pointer", transition: "transform .1s" }}
-              >
-                <title>{`${data.days[di]} ${String(hi).padStart(2, "0")}:00 · ${val} 分钟`}</title>
-              </rect>
-            ))}
-          </g>
+          <>
+            <div key={`lbl-${di}`} className="heatmap-lbl">{data.days[di]}</div>
+            {row.map((val, hi) => {
+              const lv = cellLevel(val);
+              return (
+                <div
+                  key={`${di}-${hi}`}
+                  className={`heatmap-cell hlv${lv}`}
+                  title={`${data.days[di]} ${String(hi).padStart(2, "0")}:00 · ${val} 分钟`}
+                />
+              );
+            })}
+          </>
         ))}
-      </svg>
-      {/* Legend */}
-      <div className="flex-row" style={{ gap: 6, marginTop: 8, fontSize: 11, color: "var(--text-muted)" }}>
+      </div>
+
+      <div className="heatmap-legend">
         <span>少</span>
-        {[0, 5, 15, 35, 65].map((v) => (
-          <span key={v} style={{ width: 12, height: 12, borderRadius: 3, background: cellColor(v), flexShrink: 0 }} />
+        {[0, 1, 2, 3, 4].map((lv) => (
+          <span key={lv} className={`heatmap-cell hlv${lv}`} style={{ width: 14, height: 14, borderRadius: 3 }} />
         ))}
         <span>多</span>
+        {compact && <span style={{ marginLeft: 8 }}>颜色越深表示该时段活跃时长越长</span>}
       </div>
     </div>
   );
