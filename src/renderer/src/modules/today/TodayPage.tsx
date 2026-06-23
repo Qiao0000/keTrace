@@ -148,31 +148,26 @@ export function TodayPage() {
         </div>
       </div>
 
-      {/* 今日热力条 */}
+      {/* 今日时段 */}
       <div className="card">
         <div className="card-title">今日时段</div>
-        <div className="heatbar">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(24, 1fr)", gap: 2 }}>
           {hourBars.map((min, h) => {
-            const maxMin = Math.max(...hourBars, 1);
-            const pct = (min / maxMin) * 100;
+            const lv = min <= 0 ? 0 : min < 10 ? 1 : min < 30 ? 2 : min < 60 ? 3 : 4;
             return (
-              <div key={h} className="heatbar-col">
-                <div
-                  className="heatbar-bar"
-                  style={{
-                    height: `${Math.max(4, pct)}%`,
-                    background: min > 0 ? "var(--accent)" : "var(--card-hover)",
-                    opacity: min > 0 ? 0.35 + (pct / 100) * 0.65 : 1,
-                  }}
-                  title={`${String(h).padStart(2, "0")}:00 · ${min} 分钟`}
-                />
-                {h % 3 === 0 && <span className="heatbar-h">{h}</span>}
-              </div>
+              <div
+                key={h}
+                className={`heatmap-cell hlv${lv}`}
+                style={{ aspectRatio: "unset", height: 28 }}
+                title={`${String(h).padStart(2, "0")}:00 · ${min} 分钟`}
+              />
             );
           })}
         </div>
-        <div className="heatbar-time">
-          <span>0h</span><span>12h</span><span>24h</span>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 10, color: "var(--text-muted)" }}>
+          {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => (
+            <span key={h}>{h === 24 ? "" : h}</span>
+          ))}
         </div>
       </div>
     </div>

@@ -294,6 +294,10 @@ export function registerIpcHandlers(): void {
     return gatherInsights(days || 7);
   });
 
+  ipcMain.handle("insights:heatmap", (_e, days: number) => {
+    return gatherHeatmap(days || 7);
+  });
+
   // ── config ───────────────────────────────────────────
   ipcMain.handle("config:get", () => {
     return loadConfig();

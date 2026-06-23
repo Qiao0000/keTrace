@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 interface Props {
   data: { days: string[]; hours: number[]; grid: number[][] };
   compact?: boolean;
@@ -25,7 +27,7 @@ export function Heatmap({ data, compact }: Props) {
 
         {/* Rows */}
         {data.grid.map((row, di) => (
-          <>
+          <Fragment key={di}>
             <div key={`lbl-${di}`} className="heatmap-lbl">{data.days[di]}</div>
             {row.map((val, hi) => {
               const lv = cellLevel(val);
@@ -37,7 +39,7 @@ export function Heatmap({ data, compact }: Props) {
                 />
               );
             })}
-          </>
+          </Fragment>
         ))}
       </div>
 
