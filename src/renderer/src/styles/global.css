@@ -549,7 +549,7 @@ input[type="checkbox"] {
   display: grid;
   grid-template-columns: 44px repeat(24, 1fr);
   gap: 3px;
-  min-width: 700px;
+  width: 100%;
 }
 .heatmap-h {
   font-size: 10px; color: var(--text-muted);

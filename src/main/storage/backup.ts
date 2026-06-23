@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { BACKUPS_DIR, CONFIG_FILE, WORKSPACE_FILE } from "./paths";
 
@@ -14,7 +14,18 @@ export function createBackup(): string | null {
   let copied = 0;
   for (const f of files) {
     if (existsSync(f)) {
-      copyFileSync(f, join(dir, f.split("/").pop()!));
+      const filename = f.split("/").pop()!;
+      if (f === CONFIG_FILE) {
+        try {
+          const config = JSON.parse(readFileSync(f, "utf-8")) as Record<string, unknown>;
+          if ("deepseekKey" in config) config.deepseekKey = "";
+          writeFileSync(join(dir, filename), JSON.stringify(config, null, 2), "utf-8");
+        } catch {
+          copyFileSync(f, join(dir, filename));
+        }
+      } else {
+        copyFileSync(f, join(dir, filename));
+      }
       copied++;
     }
   }
@@ -31,6 +42,7 @@ export function listBackups(): string[] {
 }
 
 export function restoreBackup(tag: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}T[\d-]+Z$/.test(tag)) return false;
   const dir = join(BACKUPS_DIR, tag);
   if (!existsSync(dir)) return false;
   createBackup(); // backup current state before restoring

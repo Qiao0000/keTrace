@@ -5,7 +5,7 @@ import { mkdirSync } from "node:fs";
 function getDataDir(): string {
   // electron-builder sets app.isPackaged; fallback for dev
   const base = app.getPath("appData");
-  const dir = join(base, "riji-next");
+  const dir = join(base, "ketrace");
   mkdirSync(dir, { recursive: true });
   return dir;
 }

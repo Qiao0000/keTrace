@@ -1,12 +1,12 @@
-import { ipcMain, app } from "electron";
+import { ipcMain, app, shell } from "electron";
 import { setupTray, destroyTray } from "./tray";
 import { loadConfig, saveConfig, loadWorkspace, saveWorkspace, readActivityRange, computeAppDurations } from "./storage/jsonStore";
 import { createBackup, listBackups, restoreBackup } from "./storage/backup";
 import { generateReportMarkdown, generateReportHtml } from "./report/markdown";
 import { gatherInsights, gatherHeatmap } from "./report/insights";
 import { generateAISummary } from "./ai/deepseek";
-import { startCollector, stopCollector, isCollectorRunning } from "./collectors";
-import { REPORTS_DIR } from "./storage/paths";
+import { startCollector, stopCollector, isCollectorRunning, getCollectorStatus } from "./collectors";
+import { DATA_DIR, REPORTS_DIR } from "./storage/paths";
 import { writeFileSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Task, TimeBlock, Project, ThesisMeta, ThesisChapter, ThesisLog, Milestone, Submission, SubmissionLog, AppConfig, ReportType } from "../shared/types";
@@ -19,8 +19,14 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("state:save", (_e, patch: Record<string, unknown>) => {
+    const allowedKeys = new Set(["tasks", "projects", "timeBlocks", "thesis", "submissions", "reviews"]);
     const ws = loadWorkspace();
-    Object.assign(ws, patch);
+    for (const [key, value] of Object.entries(patch || {})) {
+      if (allowedKeys.has(key)) {
+        (ws as unknown as Record<string, unknown>)[key] = value;
+      }
+    }
+    createBackup();
     saveWorkspace(ws);
     return { ok: true };
   });
@@ -43,6 +49,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("activity:stopCollector", () => {
     stopCollector();
     return { ok: true, running: false };
+  });
+
+  ipcMain.handle("activity:status", () => {
+    const activities = readActivityRange();
+    const lastActivity = activities.at(-1);
+    return { ...getCollectorStatus(), lastActivity };
   });
 
   // ── task ─────────────────────────────────────────────
@@ -336,6 +348,16 @@ export function registerIpcHandlers(): void {
     }
 
     return { ok: true, config: updated };
+  });
+
+  ipcMain.handle("data:paths", () => {
+    return { dataDir: DATA_DIR, reportsDir: REPORTS_DIR };
+  });
+
+  ipcMain.handle("data:openDir", async (_e, target: "data" | "reports" = "data") => {
+    const path = target === "reports" ? REPORTS_DIR : DATA_DIR;
+    await shell.openPath(path);
+    return { ok: true, path };
   });
 
   // ── backup ───────────────────────────────────────────

@@ -11,7 +11,7 @@ export function createMainWindow(): BrowserWindow {
     height: Math.min(800, Math.round(sh * 0.85)),
     minWidth: 900,
     minHeight: 600,
-    title: "日迹 Next",
+    title: "刻迹",
     show: false,
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),

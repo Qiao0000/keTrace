@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { Task, TimeBlock, Project, ThesisMeta, ThesisChapter, ThesisLog, Milestone, Submission, SubmissionLog, ReportType, AppConfig, InsightsData } from "../shared/types";
+import type { Task, TimeBlock, Project, ThesisMeta, ThesisChapter, ThesisLog, Milestone, Submission, SubmissionLog, ReportType, AppConfig, InsightsData, ActivityRecord } from "../shared/types";
 
 const api = {
   // State
@@ -11,6 +11,7 @@ const api = {
   activityStats: (since?: string, until?: string) => ipcRenderer.invoke("activity:stats", since, until),
   startCollector: () => ipcRenderer.invoke("activity:startCollector"),
   stopCollector: () => ipcRenderer.invoke("activity:stopCollector"),
+  activityStatus: () => ipcRenderer.invoke("activity:status") as Promise<{ running: boolean; platform: string; lastError: string; lastActivity?: ActivityRecord }>,
 
   // Tasks
   addTask: (task: Task) => ipcRenderer.invoke("task:add", task),
@@ -54,6 +55,8 @@ const api = {
   // Config
   getConfig: () => ipcRenderer.invoke("config:get"),
   saveConfig: (patch: Partial<AppConfig>) => ipcRenderer.invoke("config:save", patch),
+  getDataPaths: () => ipcRenderer.invoke("data:paths") as Promise<{ dataDir: string; reportsDir: string }>,
+  openDataDir: (target?: "data" | "reports") => ipcRenderer.invoke("data:openDir", target),
 
   // Backup
   createBackup: () => ipcRenderer.invoke("backup:create"),

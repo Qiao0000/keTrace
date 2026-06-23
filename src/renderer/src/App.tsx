@@ -131,7 +131,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <span className="mark">日</span>
-          <span className="name">日迹 Next</span>
+          <span className="name">刻迹</span>
         </div>
 
         <nav className="sidebar-nav">

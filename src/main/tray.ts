@@ -16,12 +16,12 @@ export function setupTray(): void {
   }
 
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
-  tray.setToolTip("日迹 Next");
+  tray.setToolTip("刻迹 KeTrace");
 
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
-        label: "打开日迹",
+        label: "打开刻迹",
         click: () => {
           const win = getMainWindow();
           if (win) {

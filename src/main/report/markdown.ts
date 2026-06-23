@@ -222,7 +222,7 @@ export function generateReportHtml(md: string): string {
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><title>日迹报告</title>
+<head><meta charset="UTF-8"><title>刻迹报告</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1.5rem; line-height: 1.8; color: #1e293b; background: #fff; }
   h1 { font-size: 1.5rem; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; }

@@ -1,7 +1,7 @@
 {
-  "name": "riji-next",
+  "name": "ketrace",
   "version": "0.1.0",
-  "description": "Local-first activity, task, thesis and report workbench.",
+  "description": "KeTrace — local-first activity, task, thesis and report workbench.",
   "author": "mymac",
   "license": "MIT",
   "type": "module",
@@ -26,8 +26,8 @@
     "vite": "^7.2.4"
   },
   "build": {
-    "appId": "com.riji.next",
-    "productName": "日迹 Next",
+    "appId": "com.ketrace.app",
+    "productName": "刻迹",
     "artifactName": "${productName}-${arch}.${ext}",
     "mac": {
       "category": "public.app-category.productivity",

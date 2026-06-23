@@ -21,7 +21,7 @@ export function InsightsPage() {
   useEffect(() => {
     setLoading(true);
     window.rijiAPI.getInsights(days).then((d) => setData(d));
-    window.rijiAPI.getHeatmap(days > 7 ? 7 : days).then((h) => setHeatmap(h));
+    window.rijiAPI.getHeatmap(days).then((h) => setHeatmap(h));
     setLoading(false);
   }, [days]);
 
@@ -42,7 +42,7 @@ export function InsightsPage() {
       </div>
 
       {/* Stats row */}
-      <div className="flex-row" style={{ gap: 12, flexWrap: "wrap" }}>
+      <div className="stats-row">
         <StatCard title="追踪时长" value={fmtHours(totalHours)} subtitle={`${days} 天合计`} color="var(--accent)" />
         <StatCard title="任务完成率" value={`${data.taskStats.rate}%`} subtitle={`${data.taskStats.done}/${data.taskStats.total} 个任务`} color="var(--green)" />
         <StatCard title="论文投入" value={fmtHours(data.thesisMinutes.reduce((s, d) => s + d.minutes, 0) / 60)} subtitle={`${days} 天合计`} color="var(--purple)" />

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, appendFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, appendFileSync, renameSync } from "node:fs";
 import { ACTIVITY_STREAM, WORKSPACE_FILE, CONFIG_FILE } from "./paths";
 import { DEFAULT_CONFIG, DEFAULT_WORKSPACE } from "../../shared/defaults";
 import type { ActivityRecord, AppConfig, Workspace, AppDuration } from "../../shared/types";
@@ -6,6 +6,12 @@ import type { ActivityRecord, AppConfig, Workspace, AppDuration } from "../../sh
 export type { AppDuration };
 
 // ─── Config ──────────────────────────────────────────────
+function writeJsonAtomic(path: string, value: unknown): void {
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(value, null, 2), "utf-8");
+  renameSync(tmp, path);
+}
+
 export function loadConfig(): AppConfig {
   if (!existsSync(CONFIG_FILE)) {
     saveConfig(DEFAULT_CONFIG);
@@ -20,7 +26,7 @@ export function loadConfig(): AppConfig {
 }
 
 export function saveConfig(config: AppConfig): void {
-  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf-8");
+  writeJsonAtomic(CONFIG_FILE, config);
 }
 
 // ─── Workspace ───────────────────────────────────────────
@@ -38,7 +44,7 @@ export function loadWorkspace(): Workspace {
 }
 
 export function saveWorkspace(ws: Workspace): void {
-  writeFileSync(WORKSPACE_FILE, JSON.stringify(ws, null, 2), "utf-8");
+  writeJsonAtomic(WORKSPACE_FILE, ws);
 }
 
 // ─── Activity ────────────────────────────────────────────
