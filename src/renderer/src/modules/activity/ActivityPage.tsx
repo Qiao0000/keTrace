@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 import type { ActivityRecord } from "../../../../shared/types";
+import { SectionTabs } from "../../components/SectionTabs";
+import { EmptyState } from "../../components/EmptyState";
+import { CardHeader } from "../../components/CardHeader";
+import { ActivityTimeline } from "../../components/ActivityTimeline";
+import { activityColor } from "../../utils/activityColors";
 
 interface AppStat {
   app: string;
@@ -15,16 +20,16 @@ function formatDuration(seconds: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-const APP_COLORS: Record<string, string> = {
-  "Google Chrome": "#3b82f6",
-  Safari: "#06b6d4",
-  "Microsoft Edge": "#10b981",
-  "Visual Studio Code": "#8b5cf6",
-  Terminal: "#64748b",
-  iTerm2: "#64748b",
-  Slack: "#ec4899",
-  "(AFK)": "#94a3b8",
-};
+function formatInterval(seconds: number): string {
+  if (seconds % 60 === 0) return `${seconds / 60} 分钟`;
+  return `${seconds} 秒`;
+}
+
+function startOfLocalDayIso(date = new Date()): string {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  return start.toISOString();
+}
 
 export function ActivityPage() {
   const [activities, setActivities] = useState<ActivityRecord[]>([]);
@@ -50,7 +55,7 @@ export function ActivityPage() {
   useEffect(() => {
     let since: string | undefined;
     if (filter === "today") {
-      since = new Date().toISOString().slice(0, 10) + "T00:00:00.000Z";
+      since = startOfLocalDayIso();
     }
     window.rijiAPI.listActivity(since).then(setActivities);
     window.rijiAPI.activityStats(since).then(setStats);
@@ -58,13 +63,12 @@ export function ActivityPage() {
 
   return (
     <div>
-      {/* Collector status */}
-      <div className="card" style={{ marginBottom: 12, padding: "10px 16px", fontSize: 13 }}>
+      <div className="card collector-status-card">
         <div className="flex-between">
-          <div className="flex-row" style={{ gap: 10 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: collectorOn ? "var(--green)" : "var(--text-muted)", flexShrink: 0 }} />
+          <div className="flex-row collector-status-info">
+            <span className={`collector-status-dot${collectorOn ? " on" : ""}`} />
             <span>{collectorOn ? "采集中" : "已暂停"}</span>
-            {config && collectorOn && <span className="text-muted">{config.pollIntervalSeconds} 秒间隔</span>}
+            {config && collectorOn && <span className="text-muted">{formatInterval(config.pollIntervalSeconds)}间隔</span>}
           </div>
           <button className={`btn btn-sm ${collectorOn ? "btn-ghost" : "btn-primary"}`} onClick={async () => {
             const res = collectorOn ? await window.rijiAPI.stopCollector() : await window.rijiAPI.startCollector();
@@ -73,38 +77,44 @@ export function ActivityPage() {
             flash(res.ok ? (status.running ? "采集已开启" : "采集已暂停") : "操作失败");
           }}>{collectorOn ? "暂停" : "开启采集"}</button>
         </div>
-        {feedback && <div className="text-muted" style={{ marginTop: 8 }}>{feedback}</div>}
+        {feedback && <div className="text-muted collector-status-feedback">{feedback}</div>}
       </div>
 
       <div className="flex-between" style={{ marginBottom: 16 }}>
-        <div className="flex-row">
-          <button className={`btn ${filter === "today" ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilter("today")}>今天</button>
-          <button className={`btn ${filter === "all" ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilter("all")}>全部</button>
-        </div>
-        <div className="flex-row">
-          <button className={`btn ${tab === "log" ? "btn-primary" : "btn-ghost"}`} onClick={() => setTab("log")}>活动日志</button>
-          <button className={`btn ${tab === "usage" ? "btn-primary" : "btn-ghost"}`} onClick={() => setTab("usage")}>应用时长</button>
-        </div>
+        <SectionTabs<"all" | "today">
+          value={filter}
+          onChange={setFilter}
+          items={[
+            { value: "today", label: "今天" },
+            { value: "all", label: "全部" },
+          ]}
+        />
+        <SectionTabs<Tab>
+          value={tab}
+          onChange={setTab}
+          items={[
+            { value: "log", label: "活动日志" },
+            { value: "usage", label: "分类时长" },
+          ]}
+        />
       </div>
 
       {tab === "usage" && (
         <div className="card">
-          <div className="card-title">应用时长排名</div>
+          <CardHeader title="活动分类时长" />
           {stats.length === 0 ? (
-            <div className="empty-state" style={{ padding: 24 }}>
-              <div className="empty-icon">◎</div>
-              <div>暂无应用时长数据</div>
-            </div>
+            <EmptyState icon="◎" title="暂无分类时长数据" hint="开启采集后会自动统计 AI 识别的活动分类" compact />
           ) : (
             <div>
               {stats.map((s, i) => {
                 const pct = stats[0] ? (s.seconds / stats[0].seconds) * 100 : 0;
+                const color = activityColor(s.app);
                 return (
                   <div key={s.app} className="category-item">
                     <span className="text-muted" style={{ width: 18 }}>{i + 1}.</span>
                     <span className="cat-name">{s.app}</span>
                     <div className="cat-bar">
-                      <div className="fill" style={{ width: `${pct}%`, background: APP_COLORS[s.app] ?? "var(--accent)" }} />
+                      <div className="fill" style={{ width: `${pct}%`, background: color }} />
                     </div>
                     <span className="cat-time">{formatDuration(s.seconds)}</span>
                   </div>
@@ -117,21 +127,15 @@ export function ActivityPage() {
 
       {tab === "log" && (
         activities.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">◉</div>
-            <div>{filter === "today" ? "今天还没有活动记录" : "暂无活动记录"}</div>
-            <div className="text-muted" style={{ marginTop: 4 }}>开启采集后会自动记录前台应用</div>
-          </div>
+          <EmptyState
+            icon="◉"
+            title={filter === "today" ? "今天还没有活动记录" : "暂无活动记录"}
+            hint="开启采集后会自动识别屏幕活动事件"
+          />
         ) : (
           <div className="card">
-            <div className="card-title">活动时间线</div>
-            {activities.map((a) => (
-              <div key={a.id} className="timeline-item">
-                <span className="time">{new Date(a.ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>
-                <span className="app-tag">{a.app}</span>
-                <span className="title-text">{a.title || "(无标题)"}</span>
-              </div>
-            ))}
+            <CardHeader title="活动时间线" />
+            <ActivityTimeline items={activities} />
           </div>
         )
       )}

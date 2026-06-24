@@ -1,0 +1,1 @@
+cmd_Release/ctrl_monitor.node := c++ -bundle -framework CoreGraphics -framework ApplicationServices -undefined dynamic_lookup -Wl,-search_paths_first -mmacosx-version-min=11.0 -arch arm64 -L./Release -stdlib=libc++  -o Release/ctrl_monitor.node Release/obj.target/ctrl_monitor/ctrl_monitor.o 

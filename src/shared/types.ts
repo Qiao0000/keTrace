@@ -44,6 +44,7 @@ export interface ThesisChapter {
   status: "todo" | "drafting" | "revising" | "done";
   progress: number;
   words?: number;
+  updatedAt?: string;
 }
 
 export interface ThesisLog {
@@ -56,14 +57,27 @@ export interface ThesisLog {
   createdAt: string;
 }
 
+export interface ThesisProject {
+  id: string;
+  meta: ThesisMeta;
+  chapters: ThesisChapter[];
+  milestones: Milestone[];
+  logs: ThesisLog[];
+  createdAt: string;
+  updatedAt: string;
+  archived?: boolean;
+}
+
 // ─── Submission ──────────────────────────────────────────
 export type SubmissionStage =
+  | "选题中"
   | "写作中"
   | "待投稿"
   | "已投稿"
   | "审稿中"
   | "返修中"
   | "已接收"
+  | "已见刊/已收录"
   | "搁置/拒稿";
 
 export interface SubmissionLog {
@@ -72,6 +86,7 @@ export interface SubmissionLog {
   type: string;
   minutes?: number;
   note: string;
+  stage?: SubmissionStage;
   createdAt: string;
 }
 
@@ -96,6 +111,10 @@ export interface ActivityRecord {
   url?: string;
   event: string;
   platform: string;
+  category?: string;
+  tags?: string[];
+  confidence?: number;
+  source?: "vision" | "system";
 }
 
 // ─── Reviews ─────────────────────────────────────────────
@@ -119,6 +138,7 @@ export interface Workspace {
     milestones: Milestone[];
     logs: ThesisLog[];
   };
+  theses: ThesisProject[];
   submissions: Submission[];
   reviews: Record<string, ReviewEntry[]>;
 }
@@ -135,6 +155,7 @@ export interface Milestone {
   title: string;
   date: string;
   done: boolean;
+  doneAt?: string;
 }
 
 // ─── Config ──────────────────────────────────────────────
@@ -143,9 +164,11 @@ export interface AppConfig {
   collectorEnabled: boolean;
   launchAtLogin: boolean;
   trayEnabled: boolean;
-  aiProvider: "deepseek" | "none";
-  deepseekKey: string;
+  dockHidden: boolean;
+  aiProvider: "doubao" | "none";
+  arkKey: string;
   theme: "system" | "light" | "dark";
+  reportsDir: string;
 }
 
 // ─── Reports ─────────────────────────────────────────────
@@ -172,4 +195,60 @@ export interface InsightsData {
 export interface AppDuration {
   app: string;
   seconds: number;
+}
+
+export interface TodayActivitySummary {
+  summary: string;
+  generatedAt: string;
+  nextRefreshAt: string;
+  source: "ai" | "local";
+  activityCount: number;
+  topApps: AppDuration[];
+}
+
+export interface DashboardSummary {
+  summary: string;
+  generatedAt: string;
+  source: "ai" | "local";
+}
+
+export interface ScreenVisionTestResult {
+  ok: boolean;
+  stage: "config" | "capture" | "ai" | "done";
+  provider: string;
+  hasArkKey: boolean;
+  display?: {
+    id: number;
+    scaleFactor: number;
+    workAreaSize: { width: number; height: number };
+    fullSize?: { width: number; height: number };
+    upperSize?: { width: number; height: number };
+  };
+  imageBytes?: number;
+  imageHash?: string;
+  captureMethod?: string;
+  screenAccess?: string;
+  aiModel?: string;
+  aiStatus?: number;
+  aiResponsePreview?: string;
+  promptPreview: string;
+  event?: {
+    title: string;
+    category: string;
+    tags: string[];
+    confidence: number;
+  };
+  error?: string;
+}
+
+export interface DataStatus {
+  schemaVersion: number;
+  appVersion: string;
+  metaUpdatedAt: string;
+  activityRecords: number;
+  activityLogBytes: number;
+  lastActivityAt: string;
+  backups: string[];
+  backupCount: number;
+  latestBackup: string;
 }

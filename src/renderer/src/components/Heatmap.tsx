@@ -32,7 +32,7 @@ function fmtShortDate(date: string): string {
 }
 
 function dayNumber(date: string): string {
-  return String(Number(date.slice(8, 10)));
+  return `${Number(date.slice(8, 10))}日`;
 }
 
 function monthLabel(days: CalendarDay[]): string {
@@ -45,6 +45,14 @@ function monthLabel(days: CalendarDay[]): string {
 function weekdayIndex(date: string): number {
   const day = new Date(`${date}T00:00:00`).getDay();
   return (day + 6) % 7;
+}
+
+function localToday(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function Heatmap({ data }: Props) {
@@ -64,6 +72,7 @@ export function Heatmap({ data }: Props) {
   const maxMinutes = Math.max(...calendarDays.map((d) => d.minutes), 0);
   const leadingBlanks = dates[0] && /^\d{4}-\d{2}-\d{2}$/.test(dates[0]) ? weekdayIndex(dates[0]) : 0;
   const isMonthView = calendarDays.length > 10;
+  const today = localToday();
 
   return (
     <div className="calendar-heatmap">
@@ -98,7 +107,7 @@ export function Heatmap({ data }: Props) {
           return (
             <div
               key={day.date}
-              className={`calendar-day hlv${level} ${day.date === new Date().toISOString().slice(0, 10) ? "today" : ""}`}
+              className={`calendar-day hlv${level} ${day.date === today ? "today" : ""}`}
               title={`${day.date} ${day.weekday} · ${fmtMinutes(day.minutes)}${day.topApp ? ` · ${day.topApp}` : ""}`}
             >
               <span className="calendar-day-main">

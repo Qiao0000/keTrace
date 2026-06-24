@@ -45,12 +45,14 @@ npm run typecheck
 # 构建
 npm run build
 
-# 打包 macOS
-npm run dist:mac
+# 打包 macOS M 芯片
+npm run dist:mac-arm64
 
 # 打包 Windows
 npm run dist:win
 ```
+
+也可以直接双击 `打包-mac-M芯片.command`。更完整的打包说明见：[docs/packaging-guide.md](docs/packaging-guide.md)
 
 ## 数据隐私 Privacy
 

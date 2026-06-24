@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { BACKUPS_DIR, CONFIG_FILE, WORKSPACE_FILE } from "./paths";
+import { ACTIVITY_STREAM, BACKUPS_DIR, CONFIG_FILE, DATA_META_FILE, WORKSPACE_FILE } from "./paths";
 
 function timestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-");
@@ -10,7 +10,7 @@ export function createBackup(): string | null {
   const ts = timestamp();
   const dir = join(BACKUPS_DIR, ts);
   mkdirSync(dir, { recursive: true });
-  const files = [CONFIG_FILE, WORKSPACE_FILE];
+  const files = [CONFIG_FILE, WORKSPACE_FILE, ACTIVITY_STREAM, DATA_META_FILE];
   let copied = 0;
   for (const f of files) {
     if (existsSync(f)) {
@@ -19,6 +19,8 @@ export function createBackup(): string | null {
         try {
           const config = JSON.parse(readFileSync(f, "utf-8")) as Record<string, unknown>;
           if ("deepseekKey" in config) config.deepseekKey = "";
+          if ("qwenKey" in config) config.qwenKey = "";
+          if ("arkKey" in config) config.arkKey = "";
           writeFileSync(join(dir, filename), JSON.stringify(config, null, 2), "utf-8");
         } catch {
           copyFileSync(f, join(dir, filename));
@@ -46,9 +48,15 @@ export function restoreBackup(tag: string): boolean {
   const dir = join(BACKUPS_DIR, tag);
   if (!existsSync(dir)) return false;
   createBackup(); // backup current state before restoring
-  for (const f of ["workspace.json", "config.json"]) {
+  for (const f of ["workspace.json", "config.json", "activity_stream.jsonl", "meta.json"]) {
     const src = join(dir, f);
-    const dest = f === "workspace.json" ? WORKSPACE_FILE : CONFIG_FILE;
+    const dest = f === "workspace.json"
+      ? WORKSPACE_FILE
+      : f === "activity_stream.jsonl"
+        ? ACTIVITY_STREAM
+        : f === "meta.json"
+          ? DATA_META_FILE
+          : CONFIG_FILE;
     if (existsSync(src)) {
       copyFileSync(src, dest);
     }

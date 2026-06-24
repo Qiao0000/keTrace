@@ -76,10 +76,11 @@ export const QuickCaptureBar = forwardRef<{ focus: () => void }, QuickCaptureBar
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-          placeholder="写下任务、论文或投稿动作"
+          placeholder="写下任务、项目、论文或投稿动作，复杂句子可由 AI 理解"
         />
         <div className="quick-capture-actions">
           <button type="button" className="quick-chip" onClick={() => primeInput("任务 ")}>任务</button>
+          <button type="button" className="quick-chip" onClick={() => primeInput("项目 ")}>项目</button>
           <button type="button" className="quick-chip" onClick={() => primeInput("论文 ")}>论文</button>
           <button type="button" className="quick-chip" onClick={() => primeInput("投稿 ")}>投稿</button>
           <button type="button" className="quick-chip" onClick={() => primeInput("新投稿 ")}>新投稿</button>

@@ -1,181 +1,415 @@
-import { useEffect, useState } from "react";
-import type { Task, TaskStatus, TimeBlock, Project, Workspace } from "../../../../shared/types";
+import { useEffect, useMemo, useState } from "react";
+import type { Project, Task, TaskStatus, TimeBlock, Workspace } from "../../../../shared/types";
 import { QuickCaptureBar } from "../../components/QuickCaptureBar";
+import { EmptyState } from "../../components/EmptyState";
 
 function genId(prefix: string): string { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
-function todayStr(): string { return new Date().toISOString().slice(0, 10); }
-function fmtDate(iso: string): string { return iso.slice(0, 10); }
+function pad(n: number): string { return String(n).padStart(2, "0"); }
+function localDateStr(date = new Date()): string { return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`; }
+function todayStr(): string { return localDateStr(); }
 
-export function TasksPage() {
+const PROJECT_COLORS = ["#ff8c42", "#43aa8b", "#f48c6e", "#4d9de0", "#9b5de5", "#45495f"];
+const BUCKET_LABEL = { must: "Must", should: "Should", could: "Could", "": "未分类" } as const;
+const BUCKET_RANK = { must: 0, should: 1, could: 2, "": 3 } as const;
+const PRIORITY_RANK = { high: 0, normal: 1, low: 2 } as const;
+type TasksTab = "projects" | "tasks";
+type ProjectView = "list" | "detail";
+
+export function TasksPage({ tab }: { tab: TasksTab }) {
+  const [projectView, setProjectView] = useState<ProjectView>("list");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [filterProject, setFilterProject] = useState("");
-  const [editId, setEditId] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("__all__");
   const [feedback, setFeedback] = useState("");
-
-  // Full form state (shown when editing or clicking "更多")
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState<"normal" | "high" | "low">("normal");
   const [dueDate, setDueDate] = useState("");
   const [projectId, setProjectId] = useState("");
   const [todayBucket, setTodayBucket] = useState<"" | "must" | "should" | "could">("");
-  const [estimate, setEstimate] = useState(0);
 
   function loadAll() {
     window.rijiAPI.getState().then((ws: Workspace) => {
-      setTasks(ws.tasks); setTimeBlocks(ws.timeBlocks); setProjects(ws.projects);
+      setTasks(ws.tasks);
+      setTimeBlocks(ws.timeBlocks);
+      setProjects(ws.projects);
     });
   }
+
   useEffect(() => { loadAll(); }, []);
+  useEffect(() => {
+    if (tab === "tasks") {
+      setSelectedProjectId("__all__");
+    } else {
+      setProjectView("list");
+    }
+    setShowForm(false);
+    setEditId(null);
+  }, [tab]);
 
   function msg(s: string) { setFeedback(s); setTimeout(() => setFeedback(""), 2000); }
 
-  // ─── Full form (for editing) ─────────────────────────────
-  function startEdit(t: Task) { setTitle(t.title); setPriority(t.priority); setDueDate(t.dueDate ?? ""); setProjectId(t.projectId ?? ""); setTodayBucket(t.todayBucket ?? ""); setEstimate(t.estimate ?? 0); setEditId(t.id); setShowForm(true); }
-  function resetForm() { setTitle(""); setPriority("normal"); setDueDate(""); setProjectId(""); setTodayBucket(""); setEstimate(0); setEditId(null); setShowForm(false); }
+  const projectStats = useMemo(() => {
+    const base = projects.map((project) => {
+      const related = tasks.filter((task) => task.projectId === project.id);
+      const open = related.filter((task) => task.status !== "done");
+      const done = related.filter((task) => task.status === "done");
+      const due = open
+        .map((task) => task.dueDate)
+        .filter((date): date is string => Boolean(date))
+        .sort()[0];
+      return { project, total: related.length, open: open.length, done: done.length, due };
+    });
+    const inbox = tasks.filter((task) => !task.projectId);
+    return [
+      {
+        project: { id: "__all__", name: "全部项目", color: "#4d9de0", createdAt: "" },
+        total: tasks.length,
+        open: tasks.filter((task) => task.status !== "done").length,
+        done: tasks.filter((task) => task.status === "done").length,
+        due: undefined,
+      },
+      ...base.sort((a, b) => b.open - a.open || a.project.name.localeCompare(b.project.name, "zh-CN")),
+      {
+        project: { id: "__inbox__", name: "未归项目", color: "#8a8fa6", createdAt: "" },
+        total: inbox.length,
+        open: inbox.filter((task) => task.status !== "done").length,
+        done: inbox.filter((task) => task.status === "done").length,
+        due: inbox.map((task) => task.dueDate).filter((date): date is string => Boolean(date)).sort()[0],
+      },
+    ];
+  }, [projects, tasks]);
+
+  const selectedStats = projectStats.find((item) => item.project.id === selectedProjectId) ?? projectStats[0];
+  const projectNameById = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
+  const visibleTasks = tasks
+    .filter((task) => {
+      if (selectedProjectId === "__all__") return true;
+      if (selectedProjectId === "__inbox__") return !task.projectId;
+      return task.projectId === selectedProjectId;
+    })
+    .sort((a, b) => {
+      if (a.status === "done" && b.status !== "done") return 1;
+      if (a.status !== "done" && b.status === "done") return -1;
+      const bucketDiff = BUCKET_RANK[a.todayBucket ?? ""] - BUCKET_RANK[b.todayBucket ?? ""];
+      if (bucketDiff !== 0) return bucketDiff;
+      const dueDiff = (a.dueDate ?? "9999-99-99").localeCompare(b.dueDate ?? "9999-99-99");
+      if (dueDiff !== 0) return dueDiff;
+      return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+    });
+  const openTasks = visibleTasks.filter((task) => task.status !== "done");
+  const doneTasks = visibleTasks.filter((task) => task.status === "done");
+  const todayBlocks = timeBlocks.filter((block) => block.date === todayStr());
+
+  function resetForm() {
+    setTitle("");
+    setPriority("normal");
+    setDueDate("");
+    setProjectId(selectedProjectId === "__all__" || selectedProjectId === "__inbox__" ? "" : selectedProjectId);
+    setTodayBucket("");
+    setEditId(null);
+    setShowForm(false);
+  }
+
+  function startAddTask() {
+    resetForm();
+    setProjectId(selectedProjectId === "__all__" || selectedProjectId === "__inbox__" ? "" : selectedProjectId);
+    setShowForm(true);
+  }
+
+  function startEdit(task: Task) {
+    setTitle(task.title);
+    setPriority(task.priority);
+    setDueDate(task.dueDate ?? "");
+    setProjectId(task.projectId ?? "");
+    setTodayBucket(task.todayBucket ?? "");
+    setEditId(task.id);
+    setShowForm(true);
+  }
 
   async function handleSave() {
     if (!title.trim()) return;
-    const base = { title: title.trim(), priority, dueDate: dueDate || undefined, projectId: projectId || undefined, todayBucket: todayBucket || undefined, estimate: estimate || undefined, updatedAt: new Date().toISOString() };
+    const base = {
+      title: title.trim(),
+      priority,
+      dueDate: dueDate || undefined,
+      projectId: projectId || undefined,
+      todayBucket: todayBucket || undefined,
+      updatedAt: new Date().toISOString(),
+    };
     if (editId) {
       await window.rijiAPI.updateTask(editId, base);
+      msg("已更新任务");
     } else {
       await window.rijiAPI.addTask({ id: genId("task_"), status: "todo", ...base, createdAt: new Date().toISOString() });
+      msg("已添加任务");
     }
-    resetForm(); loadAll(); msg(editId ? "已更新" : "已添加");
-  }
-
-  // ─── Inline actions ──────────────────────────────────────
-  async function toggleDone(t: Task) {
-    const newStatus: TaskStatus = t.status === "done" ? "todo" : "done";
-    await window.rijiAPI.updateTask(t.id, { status: newStatus, doneAt: newStatus === "done" ? new Date().toISOString() : undefined });
+    resetForm();
     loadAll();
   }
 
-  async function scheduleBlock(t: Task, minutes: number) {
-    const now = new Date();
-    const startH = now.getHours() >= 9 && now.getHours() < 18 ? now.getHours() + 1 : 9;
-    const start = `${String(Math.min(startH, 23)).padStart(2, "0")}:00`;
-    const endH = startH + Math.floor(minutes / 60);
-    const end = `${String(Math.min(endH, 23)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-    await window.rijiAPI.addTimeBlock({ id: genId("tb_"), date: todayStr(), start, end, title: t.title, taskId: t.id, createdAt: new Date().toISOString() });
-    loadAll(); msg(`已排 ${minutes} 分钟`);
+  async function renameProject(project: Project) {
+    const name = prompt("项目名称", project.name)?.trim();
+    if (!name) return;
+    await window.rijiAPI.updateProject(project.id, { name });
+    loadAll();
+    msg("项目已重命名");
   }
 
-  async function handleDelete(id: string) { if (!confirm("确定删除？")) return; await window.rijiAPI.deleteTask(id); loadAll(); msg("已删除"); }
-
-  async function handleDeleteBlock(id: string) { await window.rijiAPI.deleteTimeBlock(id); loadAll(); }
-
-  // ─── Project ─────────────────────────────────────────────
-  async function handleAddProject() {
-    const name = prompt("项目名称：");
-    if (!name?.trim()) return;
-    await window.rijiAPI.addProject({ id: genId("proj_"), name: name.trim(), createdAt: new Date().toISOString() });
-    loadAll(); msg("项目已添加");
+  async function setProjectColor(project: Project, color: string) {
+    await window.rijiAPI.updateProject(project.id, { color });
+    loadAll();
   }
 
-  // ─── Filter ──────────────────────────────────────────────
-  const filtered = filterProject ? tasks.filter((t) => t.projectId === filterProject) : tasks;
-  const todoTasks = filtered.filter((t) => t.status !== "done");
-  const doneTasks = filtered.filter((t) => t.status === "done");
-  const today = todayStr();
-  const todayBlocks = timeBlocks.filter((b) => b.date === today);
+  async function deleteProject(project: Project) {
+    const count = tasks.filter((task) => task.projectId === project.id).length;
+    if (!confirm(`删除项目「${project.name}」？${count > 0 ? ` ${count} 个任务会移出该项目。` : ""}`)) return;
+    await window.rijiAPI.deleteProject(project.id);
+    setSelectedProjectId("__all__");
+    setProjectView("list");
+    loadAll();
+    msg("项目已删除");
+  }
+
+  function openProjectDetail(id: string) {
+    setSelectedProjectId(id);
+    setProjectView("detail");
+    setShowForm(false);
+    setEditId(null);
+  }
+
+  async function toggleDone(task: Task) {
+    const status: TaskStatus = task.status === "done" ? "todo" : "done";
+    await window.rijiAPI.updateTask(task.id, { status, doneAt: status === "done" ? new Date().toISOString() : undefined });
+    loadAll();
+  }
+
+  async function deleteTask(id: string) {
+    if (!confirm("确定删除这个任务？")) return;
+    await window.rijiAPI.deleteTask(id);
+    loadAll();
+    msg("任务已删除");
+  }
+
+  async function deleteBlock(id: string) {
+    await window.rijiAPI.deleteTimeBlock(id);
+    loadAll();
+  }
+
+  const selectedIsRealProject = selectedProjectId !== "__all__" && selectedProjectId !== "__inbox__";
+  const selectedProject = selectedIsRealProject ? projects.find((project) => project.id === selectedProjectId) : undefined;
+  const realProjectStats = projectStats.filter((item) => item.project.id !== "__all__" && item.project.id !== "__inbox__");
+  const isProjectDetailPage = tab === "projects" && projectView === "detail";
 
   return (
-    <div>
-      {/* Quick add */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-        <QuickCaptureBar onCaptured={loadAll} />
-        <div className="flex-row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn btn-ghost" onClick={() => { resetForm(); setShowForm(!showForm); }}>{showForm ? "收起详情" : "详细新增/编辑"}</button>
-          <select className="form-select" style={{ width: 150, height: 32 }} value={filterProject} onChange={(e) => { if (e.target.value === "__new__") handleAddProject(); else setFilterProject(e.target.value); }}>
-          <option value="">全部项目</option>
-          {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          <option value="__new__">+ 新建项目…</option>
-          </select>
-        </div>
-      </div>
-
-      {feedback && <div className="text-muted" style={{ marginBottom: 8 }}>{feedback}</div>}
-
-      {/* Full form */}
-      {showForm && (
-        <div className="card" style={{ marginBottom: 14 }}>
-          <div className="card-title">{editId ? "编辑任务" : "新增任务（详情）"}</div>
-          <div className="form-group"><label className="form-label">标题</label><input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus /></div>
-          <div className="flex-row" style={{ gap: 10 }}>
-            <div className="form-group" style={{ flex: 1 }}><label className="form-label">优先级</label><select className="form-select" value={priority} onChange={(e) => setPriority(e.target.value as typeof priority)}><option value="low">低</option><option value="normal">普通</option><option value="high">高</option></select></div>
-            <div className="form-group" style={{ flex: 1 }}><label className="form-label">截止日期</label><input className="form-input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
-            <div className="form-group" style={{ flex: 1 }}><label className="form-label">项目</label><select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">无</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-          </div>
-          <div className="flex-row" style={{ gap: 10 }}>
-            <div className="form-group" style={{ flex: 1 }}><label className="form-label">今日桶</label><select className="form-select" value={todayBucket} onChange={(e) => setTodayBucket(e.target.value as typeof todayBucket)}><option value="">未分类</option><option value="must">Must 必须</option><option value="should">Should 应当</option><option value="could">Could 有余力</option></select></div>
-            <div className="form-group" style={{ flex: 1 }}><label className="form-label">预计时间（分钟）</label><input className="form-input" type="number" value={estimate || ""} onChange={(e) => setEstimate(Number(e.target.value))} placeholder="30" /></div>
-          </div>
-          <div className="flex-row"><button className="btn btn-primary" onClick={handleSave}>{editId ? "更新" : "保存"}</button><button className="btn btn-ghost" onClick={resetForm}>取消</button></div>
-        </div>
-      )}
-
-      {/* Today blocks */}
-      {todayBlocks.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div className="card-title" style={{ marginBottom: 6, fontSize: 13 }}>今日时间块</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {todayBlocks.sort((a, b) => a.start.localeCompare(b.start)).map((tb) => (
-              <div key={tb.id} className="flex-row" style={{ padding: "4px 8px", background: "var(--card)", borderRadius: 6, border: "1px solid var(--border)", fontSize: 13, justifyContent: "space-between" }}>
-                <div className="flex-row" style={{ gap: 8 }}>
-                  <span className="text-muted">{tb.start}-{tb.end}</span>
-                  <span>{tb.title}</span>
-                </div>
-                <button className="btn btn-ghost btn-sm" onClick={() => handleDeleteBlock(tb.id)}>×</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Task list */}
-      <div className="card-title" style={{ marginBottom: 6, fontSize: 13 }}>待办 ({todoTasks.length})</div>
-      {todoTasks.length === 0 ? (
-        <div className="empty-state"><div className="empty-icon">☑</div><div>暂无待办任务</div></div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 20 }}>
-          {todoTasks.map((t) => (
-            <div key={t.id} className="flex-row" style={{ padding: "6px 10px", background: "var(--card)", borderRadius: 6, border: "1px solid var(--border)", fontSize: 13, justifyContent: "space-between", gap: 8 }}>
-              <div className="flex-row" style={{ gap: 6, flex: 1, minWidth: 0 }}>
-                <input type="checkbox" checked={false} onChange={() => toggleDone(t)} title="完成" />
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} onClick={() => startEdit(t)} title="点击编辑">{t.title}</span>
-                {t.projectId && <span className="tag tag-todo" style={{ flexShrink: 0 }}>{projects.find((p) => p.id === t.projectId)?.name ?? t.projectId}</span>}
-                {t.dueDate && <span className="text-muted" style={{ flexShrink: 0, color: new Date(t.dueDate) < new Date() ? "var(--red)" : undefined }}>{fmtDate(t.dueDate)}</span>}
-                {t.priority === "high" && <span className="tag tag-blocked" style={{ flexShrink: 0 }}>高</span>}
-              </div>
-              <div className="flex-row" style={{ gap: 4, flexShrink: 0 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => scheduleBlock(t, 30)} title="排 30 分钟">30m</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => scheduleBlock(t, 60)} title="排 60 分钟">60m</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => startEdit(t)}>编辑</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(t.id)} style={{ color: "var(--red)" }}>×</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {doneTasks.length > 0 && (
+    <div className="tasks-workspace">
+      {tab === "tasks" ? (
         <>
-          <div className="card-title" style={{ marginBottom: 6, fontSize: 13 }}>已完成 ({doneTasks.length})</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {doneTasks.map((t) => (
-              <div key={t.id} className="flex-row" style={{ padding: "4px 10px", fontSize: 13, opacity: 0.6, justifyContent: "space-between" }}>
-                <div className="flex-row" style={{ gap: 6 }}>
-                  <input type="checkbox" checked onChange={() => toggleDone(t)} />
-                  <span style={{ textDecoration: "line-through" }}>{t.title}</span>
+          <QuickCaptureBar onCaptured={loadAll} />
+
+          {feedback && <div className="settings-feedback">{feedback}</div>}
+
+          {showForm && (
+            <div className="project-task-form task-inline-form">
+              <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="任务标题" autoFocus />
+              <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                <option value="">未归项目</option>
+                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
+              <select className="form-select" value={todayBucket} onChange={(e) => setTodayBucket(e.target.value as typeof todayBucket)}>
+                <option value="">未分类</option><option value="must">Must</option><option value="should">Should</option><option value="could">Could</option>
+              </select>
+              <select className="form-select" value={priority} onChange={(e) => setPriority(e.target.value as typeof priority)}>
+                <option value="normal">普通</option><option value="high">高</option><option value="low">低</option>
+              </select>
+              <input className="form-input date-icon-input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} aria-label="截止日期" title="截止日期" />
+              <button className="btn btn-primary btn-sm" onClick={handleSave}>{editId ? "保存" : "添加"}</button>
+              <button className="btn btn-ghost btn-sm" onClick={resetForm}>取消</button>
+            </div>
+          )}
+
+          <section className="task-list-flat">
+            {openTasks.length === 0 && doneTasks.length === 0 ? (
+              <EmptyState icon="☑" title="还没有任务" hint="用上方快速输入创建任务" />
+            ) : (
+              <div className="task-row-list">
+                {openTasks.map((task) => (
+                  <div key={task.id} className="task-row-card">
+                    <input type="checkbox" checked={false} onChange={() => toggleDone(task)} />
+                    <div className="task-row-main">
+                      <strong onClick={() => startEdit(task)}>{task.title}</strong>
+                      <span>
+                        {task.projectId ? projectNameById.get(task.projectId) ?? "未知项目" : "未归项目"}
+                        {task.todayBucket ? ` · ${BUCKET_LABEL[task.todayBucket]}` : " · 未分类"}
+                        {task.dueDate ? ` · 截止 ${task.dueDate}` : ""}
+                      </span>
+                    </div>
+                    <span className={`tag tag-${task.todayBucket === "must" ? "blocked" : task.todayBucket === "should" ? "doing" : task.todayBucket === "could" ? "todo" : "done"}`}>
+                      {BUCKET_LABEL[task.todayBucket ?? ""]}
+                    </span>
+                    {task.priority === "high" ? <span className="tag tag-blocked">高</span> : <span className="task-row-spacer" />}
+                    <div className="task-row-actions">
+                      <button className="btn btn-ghost btn-sm" onClick={() => startEdit(task)}>编辑</button>
+                    </div>
+                  </div>
+                ))}
+
+                {doneTasks.length > 0 && (
+                  <div className="task-row-section">已完成 {doneTasks.length}</div>
+                )}
+                {doneTasks.map((task) => (
+                  <div key={task.id} className="task-row-card done">
+                    <input type="checkbox" checked onChange={() => toggleDone(task)} />
+                    <div className="task-row-main">
+                      <strong>{task.title}</strong>
+                      <span>{task.projectId ? projectNameById.get(task.projectId) ?? "未知项目" : "未归项目"}</span>
+                    </div>
+                    <span className="tag tag-done">完成</span>
+                    <span className="task-row-spacer" />
+                    <div className="task-row-actions">
+                      <button className="btn btn-ghost btn-sm danger-text" onClick={() => deleteTask(task.id)}>×</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      ) : (
+        <>
+      {feedback && <div className="settings-feedback">{feedback}</div>}
+
+      {projectView === "list" ? (
+        <section className="project-list-flat project-list-full">
+          {realProjectStats.length === 0 ? (
+            <EmptyState
+              icon="＋"
+              title="还没有项目"
+              hint="用快速输入创建项目"
+            />
+          ) : (
+            <div className="project-table project-table-cards">
+              {realProjectStats.map((item) => {
+              const progress = item.total > 0 ? Math.round((item.done / item.total) * 100) : 0;
+              return (
+                <button key={item.project.id} className="project-row project-row-card" onClick={() => openProjectDetail(item.project.id)}>
+                  <span className="project-dot" style={{ background: item.project.color || "var(--accent)" }} />
+                  <span className="project-row-main">
+                    <span className="project-row-name">{item.project.name}</span>
+                    <span className="project-row-meta">{item.open} 待办 · {item.done}/{item.total} 完成{item.due ? ` · 最近 ${item.due}` : " · 无截止"}</span>
+                  </span>
+                  <span className="project-row-progress">
+                    <span>{progress}%</span>
+                    <i><b style={{ width: `${progress}%` }} /></i>
+                  </span>
+                  <span className="project-row-action">查看</span>
+                </button>
+              );
+              })}
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="project-detail-panel project-detail-full">
+          <div className="project-detail-head">
+            <div>
+              <div className="project-detail-kicker">项目详情</div>
+              <h3>{selectedStats?.project.name ?? "全部项目"}</h3>
+            </div>
+            <div className="project-detail-actions">
+              <button className="btn btn-ghost btn-sm" onClick={() => { setProjectView("list"); resetForm(); }}>返回列表</button>
+              {selectedProject && (
+                <>
+                  <div className="project-color-row">
+                    {PROJECT_COLORS.map((color) => (
+                      <button key={color} className={`project-color-dot ${(selectedProject.color || "") === color ? "active" : ""}`} style={{ background: color }} onClick={() => setProjectColor(selectedProject, color)} title={color} />
+                    ))}
+                  </div>
+                  <button className="btn btn-ghost btn-sm" onClick={() => renameProject(selectedProject)}>改名</button>
+                  <button className="btn btn-ghost btn-sm danger-text" onClick={() => deleteProject(selectedProject)}>删除</button>
+                </>
+              )}
+              <button className="btn btn-primary btn-sm" onClick={startAddTask}>新增任务</button>
+            </div>
+          </div>
+
+          <div className="project-stat-row">
+            <div><strong>{selectedStats?.open ?? 0}</strong><span>未完成</span></div>
+            <div><strong>{selectedStats?.done ?? 0}</strong><span>已完成</span></div>
+            <div><strong>{selectedStats?.due ?? "无"}</strong><span>最近截止</span></div>
+          </div>
+
+          {showForm && (
+            <div className="project-task-form">
+              <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="任务标题" autoFocus />
+              <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                <option value="">未归项目</option>
+                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
+              <select className="form-select" value={todayBucket} onChange={(e) => setTodayBucket(e.target.value as typeof todayBucket)}>
+                <option value="">未分类</option><option value="must">Must</option><option value="should">Should</option><option value="could">Could</option>
+              </select>
+              <select className="form-select" value={priority} onChange={(e) => setPriority(e.target.value as typeof priority)}>
+                <option value="normal">普通</option><option value="high">高</option><option value="low">低</option>
+              </select>
+              <input className="form-input date-icon-input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} aria-label="截止日期" title="截止日期" />
+              <button className="btn btn-primary btn-sm" onClick={handleSave}>{editId ? "保存" : "添加"}</button>
+              <button className="btn btn-ghost btn-sm" onClick={resetForm}>取消</button>
+            </div>
+          )}
+
+          {todayBlocks.length > 0 && (
+            <div className="project-timeblocks">
+              <strong>今日时间块</strong>
+              {todayBlocks.sort((a, b) => a.start.localeCompare(b.start)).map((block) => (
+                <div key={block.id}>
+                  <span>{block.start}-{block.end}</span>
+                  <span>{block.title}</span>
+                  <button className="btn btn-ghost btn-sm" onClick={() => deleteBlock(block.id)}>×</button>
                 </div>
-                <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(t.id)}>×</button>
+              ))}
+            </div>
+          )}
+
+          <div className="project-task-list">
+            <div className="project-task-section-title">待办 {openTasks.length}</div>
+            {openTasks.length === 0 ? (
+              <EmptyState icon="☑" title="这个视图没有待办任务" />
+            ) : openTasks.map((task) => (
+              <div key={task.id} className="project-task-row">
+                <div className="project-task-main">
+                  <input type="checkbox" checked={false} onChange={() => toggleDone(task)} />
+                  <strong onClick={() => startEdit(task)}>{task.title}</strong>
+                  <span className={`tag tag-${task.todayBucket === "must" ? "blocked" : task.todayBucket === "should" ? "doing" : task.todayBucket === "could" ? "todo" : "done"}`}>{BUCKET_LABEL[task.todayBucket ?? ""]}</span>
+                  {task.dueDate && <span className="text-muted">截止 {task.dueDate}</span>}
+                  {task.priority === "high" && <span className="tag tag-blocked">高</span>}
+                </div>
+                <div className="project-task-actions">
+                  <button className="btn btn-ghost btn-sm" onClick={() => startEdit(task)}>编辑</button>
+                  <button className="btn btn-ghost btn-sm danger-text" onClick={() => deleteTask(task.id)}>×</button>
+                </div>
               </div>
             ))}
+
+            {doneTasks.length > 0 && (
+              <>
+                <div className="project-task-section-title">已完成 {doneTasks.length}</div>
+                {doneTasks.map((task) => (
+                  <div key={task.id} className="project-task-row done">
+                    <div className="project-task-main">
+                      <input type="checkbox" checked onChange={() => toggleDone(task)} />
+                      <strong>{task.title}</strong>
+                    </div>
+                    <button className="btn btn-ghost btn-sm danger-text" onClick={() => deleteTask(task.id)}>×</button>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
+        </section>
+      )}
         </>
       )}
     </div>

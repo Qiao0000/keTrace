@@ -1,9 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { InsightsData } from "../../../../shared/types";
 import { BarChart } from "../../components/BarChart";
 import { DonutChart } from "../../components/DonutChart";
 import { Heatmap } from "../../components/Heatmap";
 import { StatCard } from "../../components/StatCard";
+import { SectionTabs } from "../../components/SectionTabs";
+import { EmptyState } from "../../components/EmptyState";
+import { CardHeader } from "../../components/CardHeader";
+import { LoadingState } from "../../components/LoadingState";
+import { activityColor } from "../../utils/activityColors";
 
 const PALETTE = ["var(--accent)", "var(--green)", "var(--orange)", "var(--red)", "var(--purple)", "#ec4899", "#06b6d4", "#84cc16"];
 
@@ -12,21 +17,67 @@ function fmtHours(h: number): string {
   return Math.round(h * 60) + "m";
 }
 
+function fmtTotalHoursFromSeconds(seconds: number): string {
+  return `${(seconds / 3600).toFixed(1)}h`;
+}
+
+function msUntilNextLocalDay(): number {
+  const now = new Date();
+  const next = new Date(now);
+  next.setDate(now.getDate() + 1);
+  next.setHours(0, 0, 2, 0);
+  return Math.max(1_000, next.getTime() - now.getTime());
+}
+
 export function InsightsPage() {
   const [data, setData] = useState<InsightsData | null>(null);
   const [heatmap, setHeatmap] = useState<{ dates?: string[]; days: string[]; hours: number[]; grid: number[][] } | null>(null);
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     setLoading(true);
-    window.rijiAPI.getInsights(days).then((d) => setData(d));
-    window.rijiAPI.getHeatmap(days).then((h) => setHeatmap(h));
-    setLoading(false);
+    try {
+      const [nextData, nextHeatmap] = await Promise.all([
+        window.rijiAPI.getInsights(days),
+        window.rijiAPI.getHeatmap(days),
+      ]);
+      setData(nextData);
+      setHeatmap(nextHeatmap);
+    } finally {
+      setLoading(false);
+    }
   }, [days]);
 
-  if (loading) return <div className="text-muted">加载中...</div>;
-  if (!data) return <div className="empty-state"><div className="empty-icon">◎</div><div>暂无洞察数据</div></div>;
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    const onFocus = () => load();
+    const onQuickAction = () => load();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("quick-action-executed", onQuickAction);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("quick-action-executed", onQuickAction);
+    };
+  }, [load]);
+
+  useEffect(() => {
+    let intervalId: number | undefined;
+    const timeoutId = window.setTimeout(() => {
+      load();
+      intervalId = window.setInterval(load, 24 * 60 * 60 * 1000);
+    }, msUntilNextLocalDay());
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (intervalId) window.clearInterval(intervalId);
+    };
+  }, [load]);
+
+  if (loading) return <LoadingState label="正在整理洞察数据…" rows={4} />;
+  if (!data) return <EmptyState icon="◎" title="暂无洞察数据" />;
 
   const totalHours = data.dailyHours.reduce((s, d) => s + d.hours, 0);
   const hasActivity = totalHours > 0;
@@ -36,49 +87,50 @@ export function InsightsPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Toggle */}
-      <div className="flex-row">
-        <button className={`btn ${days === 7 ? "btn-primary" : "btn-ghost"}`} onClick={() => setDays(7)}>最近 7 天</button>
-        <button className={`btn ${days === 30 ? "btn-primary" : "btn-ghost"}`} onClick={() => setDays(30)}>最近 30 天</button>
-      </div>
+      <SectionTabs<number>
+        value={days}
+        onChange={setDays}
+        items={[
+          { value: 7, label: "最近 7 天" },
+          { value: 30, label: "最近 30 天" },
+        ]}
+      />
 
       {/* Stats row */}
       <div className="stats-row">
-        <StatCard title="追踪时长" value={fmtHours(totalHours)} subtitle={`${days} 天合计`} color="var(--accent)" />
-        <StatCard title="任务完成率" value={`${data.taskStats.rate}%`} subtitle={`${data.taskStats.done}/${data.taskStats.total} 个任务`} color="var(--green)" />
-        <StatCard title="论文投入" value={fmtHours(data.thesisMinutes.reduce((s, d) => s + d.minutes, 0) / 60)} subtitle={`${days} 天合计`} color="var(--purple)" />
-        <StatCard title="活跃投稿" value={data.submissionStages.reduce((s, d) => s + d.count, 0)} subtitle={`${data.submissionStages.length} 个阶段`} color="var(--orange)" />
+        <StatCard title="追踪时长" value={fmtHours(totalHours)} subtitle={`${days} 天合计`} color="var(--accent)" bordered={false} />
+        <StatCard title="任务完成率" value={`${data.taskStats.rate}%`} subtitle={`${data.taskStats.done}/${data.taskStats.total} 个任务`} color="var(--green)" bordered={false} />
+        <StatCard title="论文投入" value={fmtHours(data.thesisMinutes.reduce((s, d) => s + d.minutes, 0) / 60)} subtitle={`${days} 天合计`} color="var(--purple)" bordered={false} />
+        <StatCard title="活跃投稿" value={data.submissionStages.reduce((s, d) => s + d.count, 0)} subtitle={`${data.submissionStages.length} 个阶段`} color="var(--orange)" bordered={false} />
       </div>
 
       {/* 1. 日历热力图 */}
       <div className="card">
-        <div className="card-title">{days === 7 ? "本周活跃日历" : "月度活跃日历"} · 日期颜色越深表示当天越活跃</div>
+        <CardHeader title={`${days === 7 ? "本周活跃日历" : "月度活跃日历"} · 日期颜色越深表示当天越活跃`} />
         {!heatmap || heatmap.grid.length === 0 ? (
-          <div className="empty-state" style={{ padding: 24 }}>
-            <div className="text-muted">暂无活动数据，开启采集后自动统计</div>
-          </div>
+          <EmptyState title="暂无活动数据" hint="开启采集后会自动统计" compact />
         ) : (
           <Heatmap data={heatmap} />
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-        {/* 2. 应用分类占比 */}
-        <div className="card">
-          <div className="card-title">应用分类占比</div>
+      <div className="insights-chart-grid">
+        {/* 2. 活动分类占比 */}
+        <div className="card insights-panel">
+          <CardHeader title="活动分类占比" />
           {data.topApps.length === 0 ? (
-            <div className="empty-state" style={{ padding: 20 }}>
-              <div className="text-muted">暂无应用数据</div>
-            </div>
+            <EmptyState title="暂无活动分类数据" compact />
           ) : (
-            <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="insights-donut-row">
               <DonutChart
-                data={data.topApps.map((a, i) => ({ label: a.app, value: a.seconds, color: PALETTE[i % PALETTE.length] }))}
+                data={data.topApps.map((a) => ({ label: a.app, value: a.seconds, color: activityColor(a.app) }))}
                 size={140}
+                centerLabel={fmtTotalHoursFromSeconds(data.topApps.reduce((sum, item) => sum + item.seconds, 0))}
               />
               <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12 }}>
-                {data.topApps.slice(0, 6).map((a, i) => (
+                {data.topApps.slice(0, 6).map((a) => (
                   <div key={a.app} className="flex-row" style={{ gap: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: PALETTE[i % PALETTE.length], flexShrink: 0 }} />
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: activityColor(a.app), flexShrink: 0 }} />
                     <span>{a.app}</span>
                     <span className="text-muted">{fmtHours(a.seconds / 3600)}</span>
                   </div>
@@ -89,13 +141,10 @@ export function InsightsPage() {
         </div>
 
         {/* 3. 论文投入时长 */}
-        <div className="card">
-          <div className="card-title">论文投入时长</div>
+        <div className="card insights-panel">
+          <CardHeader title="论文投入时长" />
           {!hasThesis ? (
-            <div className="empty-state" style={{ padding: 20 }}>
-              <div className="empty-icon">◆</div>
-              <div className="text-muted">暂无论文推进记录</div>
-            </div>
+            <EmptyState icon="◆" title="暂无论文推进记录" compact />
           ) : (
             <BarChart
               data={data.thesisMinutes.map((d) => ({ label: d.date, value: d.minutes / 60, color: "var(--purple)" }))}
@@ -107,15 +156,12 @@ export function InsightsPage() {
         </div>
 
         {/* 4. 投稿阶段分布 */}
-        <div className="card">
-          <div className="card-title">投稿阶段分布</div>
+        <div className="card insights-panel">
+          <CardHeader title="投稿阶段分布" />
           {!hasSubmissions ? (
-            <div className="empty-state" style={{ padding: 20 }}>
-              <div className="empty-icon">▤</div>
-              <div className="text-muted">暂无投稿项目</div>
-            </div>
+            <EmptyState icon="▤" title="暂无投稿项目" compact />
           ) : (
-            <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="insights-donut-row">
               <DonutChart
                 data={data.submissionStages.map((s, i) => ({ label: s.stage, value: s.count, color: PALETTE[i % PALETTE.length] }))}
                 size={130}
@@ -134,13 +180,10 @@ export function InsightsPage() {
         </div>
 
         {/* 5. 任务完成率详情 */}
-        <div className="card">
-          <div className="card-title">任务概览</div>
+        <div className="card insights-panel">
+          <CardHeader title="任务概览" />
           {data.taskStats.total === 0 ? (
-            <div className="empty-state" style={{ padding: 20 }}>
-              <div className="empty-icon">☑</div>
-              <div className="text-muted">暂无任务</div>
-            </div>
+            <EmptyState icon="☑" title="暂无任务" compact />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 8 }}>
               <div className="flex-between">

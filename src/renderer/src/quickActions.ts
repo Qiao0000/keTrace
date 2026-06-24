@@ -1,6 +1,6 @@
 import type { JournalTemplateType, Project, ReportType, Submission, SubmissionStage, Task, TaskPriority, Workspace } from "../../shared/types";
 
-export type QuickNavTarget = "today" | "activity" | "tasks" | "thesis" | "reports" | "insights" | "settings";
+export type QuickNavTarget = "today" | "tasks" | "thesis" | "reports" | "dashboard" | "insights" | "settings";
 
 export interface QuickUndoAction {
   type: "task" | "submission" | "project";
@@ -19,6 +19,10 @@ export interface QuickActionPreview {
   detail: string;
 }
 
+interface ExecuteOptions {
+  allowAI?: boolean;
+}
+
 interface ParsedBase {
   text: string;
   date?: string;
@@ -31,33 +35,45 @@ interface ParsedTask extends ParsedBase {
   priority: TaskPriority;
 }
 
-const SUBMISSION_STAGES: SubmissionStage[] = ["写作中", "待投稿", "已投稿", "审稿中", "返修中", "已接收", "搁置/拒稿"];
+const SUBMISSION_STAGES: SubmissionStage[] = ["选题中", "写作中", "待投稿", "已投稿", "审稿中", "返修中", "已接收", "已见刊/已收录", "搁置/拒稿"];
+const FINISHED_SUBMISSION_STAGES: SubmissionStage[] = ["已接收", "已见刊/已收录", "搁置/拒稿"];
 
 const NAV_COMMANDS: Record<string, QuickNavTarget> = {
   今日: "today",
   今天: "today",
   首页: "today",
-  活动: "activity",
-  采集: "activity",
+  活动: "reports",
+  采集: "reports",
   任务: "tasks",
+  项目: "tasks",
+  项目与任务: "tasks",
+  任务与项目: "tasks",
   待办: "tasks",
   论文: "thesis",
   投稿: "thesis",
+  论文与投稿: "thesis",
   报告: "reports",
+  报告与活动: "reports",
+  活动与报告: "reports",
+  看板: "dashboard",
+  数据看板: "dashboard",
+  项目看板: "dashboard",
   洞察: "insights",
+  洞察分析: "insights",
   统计: "insights",
   设置: "settings",
+  系统设置: "settings",
   配置: "settings",
 };
 
 const NAV_LABELS: Record<QuickNavTarget, string> = {
   today: "今日",
-  activity: "活动",
-  tasks: "任务",
-  thesis: "论文",
-  reports: "报告",
-  insights: "洞察",
-  settings: "设置",
+  tasks: "项目与任务",
+  thesis: "论文与投稿",
+  reports: "报告与活动",
+  dashboard: "数据看板",
+  insights: "洞察分析",
+  settings: "系统设置",
 };
 
 function genId(prefix: string): string {
@@ -65,7 +81,13 @@ function genId(prefix: string): string {
 }
 
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return formatDate(new Date());
+}
+
+function addMonths(date: Date, months: number): Date {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
 }
 
 function dateFromToken(token: string): string | undefined {
@@ -73,15 +95,81 @@ function dateFromToken(token: string): string | undefined {
   if (token === "明天" || token === "tomorrow") {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
+    return formatDate(d);
   }
   if (token === "后天") {
     const d = new Date();
     d.setDate(d.getDate() + 2);
-    return d.toISOString().slice(0, 10);
+    return formatDate(d);
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(token)) return token;
   return undefined;
+}
+
+function formatDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function cleanNaturalPiece(value: string | undefined): string | undefined {
+  const cleaned = value
+    ?.replace(/^(一个|一项|这个|的)/, "")
+    .replace(/等(内容|工作|事项)?$/, "")
+    .replace(/相关(内容|工作|事项)?$/, "")
+    .trim();
+  return cleaned || undefined;
+}
+
+function dateFromNaturalText(text: string): string | undefined {
+  const now = new Date();
+  let match = text.match(/下个月\s*(\d{1,2})\s*(?:号|日)?/);
+  if (match) {
+    const target = addMonths(now, 1);
+    target.setDate(Number(match[1]));
+    return formatDate(target);
+  }
+
+  match = text.match(/本月\s*(\d{1,2})\s*(?:号|日)?/);
+  if (match) {
+    const target = new Date(now);
+    target.setDate(Number(match[1]));
+    return formatDate(target);
+  }
+
+  match = text.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*(?:号|日)?/);
+  if (match) {
+    const target = new Date(now);
+    target.setMonth(Number(match[1]) - 1);
+    target.setDate(Number(match[2]));
+    if (target.getTime() < now.getTime()) target.setFullYear(target.getFullYear() + 1);
+    return formatDate(target);
+  }
+
+  return undefined;
+}
+
+function parseNaturalProjectProgress(text: string): string[] {
+  const projectMatch = text.match(/(?:完成|做|推进|准备|申报|开展)(?:一个|一项|这个|的)?\s*([^，。,.；;]*?(?:项目|课题|基金|资助|论文|投稿|申报|研究))/);
+  const progressMatch = text.match(/(?:进行|写|撰写|完成|推进|正在做|现在在做|现在在进行)\s*([^，。,.；;]*(?:章|节|部分|初稿|修改|撰写|写作|分析|整理)[^，。,.；;]*)/);
+  const dueDate = /截止|deadline|ddl/i.test(text) ? dateFromNaturalText(text) : undefined;
+  const projectName = cleanNaturalPiece(projectMatch?.[1]);
+  const progress = cleanNaturalPiece(progressMatch?.[1]);
+
+  if (!projectName || !progress) return [];
+
+  const commands = [`项目 ${projectName}`];
+  commands.push(`任务 ${progress} #${projectName}${dueDate ? ` @${dueDate}` : ""}`);
+  return commands;
+}
+
+function splitCommands(commandText: string): string[] {
+  return commandText
+    .split(/\n+/)
+    .map((command) => command.trim())
+    .filter(Boolean)
+    .slice(0, 4);
 }
 
 function stripPrefix(input: string, prefixes: string[]): string | null {
@@ -195,7 +283,7 @@ function pickSubmission(submissions: Submission[], target?: string): Submission 
   }
 
   const active = submissions
-    .filter((s) => s.stage !== "已接收" && s.stage !== "搁置/拒稿")
+    .filter((s) => !FINISHED_SUBMISSION_STAGES.includes(s.stage))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return active[0] ?? submissions[0];
 }
@@ -225,6 +313,37 @@ function parseJournalTemplateType(input: string): JournalTemplateType | undefine
   if (/^(月记|月记模板|月复盘|月复盘模板|每月复盘|每月模板)$/i.test(text)) return "month";
   if (/^(年记|年记模板|年复盘|年复盘模板|年度复盘|年度模板)$/i.test(text)) return "year";
   return undefined;
+}
+
+function isSystemCommand(text: string): boolean {
+  return /^(开始采集|开启采集|启动采集|停止采集|暂停采集|关闭采集|备份|创建备份|打开数据|数据目录|打开报告|报告目录)$/i.test(text);
+}
+
+function hasExplicitQuickSyntax(text: string): boolean {
+  if (parseNavTarget(text) || parseReportType(text) || parseJournalTemplateType(text) || isSystemCommand(text)) return true;
+  if (stripPrefix(text, ["任务", "待办", "项目", "新项目", "新投稿", "投稿项目", "论文", "写作", "paper", "投稿", "submission"]) !== null) return true;
+  return /[#@!]\S+|(?:^|\s)\d+\s*(?:min|m|分钟|分|字|words?|w)(?=\s|$)/i.test(text);
+}
+
+function shouldAskAI(text: string): boolean {
+  if (hasExplicitQuickSyntax(text)) return false;
+  return /帮我|提醒|明天|后天|今天|下周|下月|下个月|论文|投稿|项目|报告|日报|周报|月报|模板|复盘|备份|采集|打开|安排|记录|完成|截止|deadline|cover|letter|submit|revise/i.test(text);
+}
+
+async function executeCommandSequence(commands: string[]): Promise<QuickActionResult> {
+  const results: QuickActionResult[] = [];
+  for (const command of commands) {
+    const result = await executeQuickAction(command, { allowAI: false });
+    results.push(result);
+    if (!result.ok) return result;
+  }
+
+  const last = results.at(-1);
+  return {
+    ok: true,
+    message: `已执行 ${results.length} 项 · AI识别`,
+    navigate: last?.navigate,
+  };
 }
 
 function journalTemplateLabel(type: JournalTemplateType): string {
@@ -273,8 +392,8 @@ export function describeQuickAction(input: string): QuickActionPreview {
     return { title: `创建${journalTemplateLabel(templateType)}复盘模板`, detail: "Enter 保存到报告历史，可继续编辑填写" };
   }
 
-  if (/^(开始采集|开启采集|启动采集)$/i.test(text)) return { title: "开启活动采集", detail: "Enter 启动前台应用记录" };
-  if (/^(停止采集|暂停采集|关闭采集)$/i.test(text)) return { title: "暂停活动采集", detail: "Enter 停止前台应用记录" };
+  if (/^(开始采集|开启采集|启动采集)$/i.test(text)) return { title: "开启活动采集", detail: "Enter 启动屏幕活动识别" };
+  if (/^(停止采集|暂停采集|关闭采集)$/i.test(text)) return { title: "暂停活动采集", detail: "Enter 停止屏幕活动识别" };
   if (/^(备份|创建备份)$/i.test(text)) return { title: "创建本地备份", detail: "Enter 备份 workspace 和 config" };
   if (/^(打开数据|数据目录)$/i.test(text)) return { title: "打开数据目录", detail: "Enter 在系统文件管理器中打开" };
   if (/^(打开报告|报告目录)$/i.test(text)) return { title: "打开报告目录", detail: "Enter 在系统文件管理器中打开" };
@@ -283,10 +402,12 @@ export function describeQuickAction(input: string): QuickActionPreview {
   if (stripPrefix(text, ["论文", "写作", "paper"]) !== null) return { title: "记录论文进展", detail: "可写：论文 写结果部分 90min 800字" };
   if (stripPrefix(text, ["投稿", "submission"]) !== null) return { title: "记录投稿动作", detail: "可写：投稿 补 cover letter 30min #期刊" };
   if (stripPrefix(text, ["项目", "新项目"]) !== null) return { title: "创建项目", detail: "可写：项目 课题名称" };
+  if (shouldAskAI(text)) return { title: "AI 理解后执行", detail: "Enter 后识别为任务、项目、论文、投稿、报告或页面操作" };
   return { title: "创建任务", detail: "可写：整理文献 #论文 @明天 !高" };
 }
 
-export async function executeQuickAction(input: string): Promise<QuickActionResult> {
+export async function executeQuickAction(input: string, options: ExecuteOptions = {}): Promise<QuickActionResult> {
+  const allowAI = options.allowAI ?? true;
   const text = input.trim();
   if (!text) return { ok: false, message: "请输入内容" };
 
@@ -295,8 +416,9 @@ export async function executeQuickAction(input: string): Promise<QuickActionResu
 
   const reportType = parseReportType(text);
   if (reportType) {
-    const res = await window.rijiAPI.generateReport(reportType);
-    return { ok: !!res.ok, message: res.ok ? "报告已生成" : "报告生成失败", navigate: "reports" };
+    const res = await window.rijiAPI.generateReport(reportType, { useAI: true });
+    const message = res.ok && res.summary ? "报告已生成 · AI概括已写入" : "报告已生成";
+    return { ok: !!res.ok, message: res.ok ? message : "报告生成失败", navigate: "reports" };
   }
 
   const templateType = parseJournalTemplateType(text);
@@ -307,12 +429,12 @@ export async function executeQuickAction(input: string): Promise<QuickActionResu
 
   if (/^(开始采集|开启采集|启动采集)$/i.test(text)) {
     const res = await window.rijiAPI.startCollector();
-    return { ok: !!res.ok, message: res.ok ? "采集已开启" : "开启失败", navigate: "activity" };
+    return { ok: !!res.ok, message: res.ok ? "采集已开启" : "开启失败", navigate: "reports" };
   }
 
   if (/^(停止采集|暂停采集|关闭采集)$/i.test(text)) {
     const res = await window.rijiAPI.stopCollector();
-    return { ok: !!res.ok, message: res.ok ? "采集已暂停" : "暂停失败", navigate: "activity" };
+    return { ok: !!res.ok, message: res.ok ? "采集已暂停" : "暂停失败", navigate: "reports" };
   }
 
   if (/^(备份|创建备份)$/i.test(text)) {
@@ -394,6 +516,26 @@ export async function executeQuickAction(input: string): Promise<QuickActionResu
       createdAt: new Date().toISOString(),
     });
     return { ok: true, message: `投稿动作已记录 · ${submission.title}`, navigate: "thesis" };
+  }
+
+  if (allowAI && shouldAskAI(text)) {
+    const localCommands = parseNaturalProjectProgress(text);
+    if (localCommands.length > 0) {
+      return executeCommandSequence(localCommands);
+    }
+
+    const parsedByAI = await window.rijiAPI.parseQuickInput(text);
+    const commands = splitCommands(parsedByAI.command ?? "");
+    if (parsedByAI.ok && commands.length > 0 && commands.join("\n") !== text) {
+      if (commands.length === 1) {
+        const result = await executeQuickAction(commands[0], { allowAI: false });
+        return {
+          ...result,
+          message: result.ok ? `${result.message} · AI识别` : result.message,
+        };
+      }
+      return executeCommandSequence(commands);
+    }
   }
 
   const parsed = parseTask(text);

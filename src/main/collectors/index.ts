@@ -1,6 +1,7 @@
 import { platform } from "node:os";
 import { startMacOSCollector, stopMacOSCollector, isMacOSCollectorRunning } from "./macosCollector";
 import { startWindowsCollector, stopWindowsCollector, isWindowsCollectorRunning } from "./windowsCollector";
+import { MAX_POLL_INTERVAL_SECONDS, MIN_POLL_INTERVAL_SECONDS } from "../../shared/defaults";
 
 let running = false;
 let lastError = "";
@@ -8,11 +9,15 @@ let lastError = "";
 export function startCollector(intervalMs: number): void {
   if (running) return;
   const p = platform();
+  const safeIntervalMs = Math.min(
+    MAX_POLL_INTERVAL_SECONDS * 1000,
+    Math.max(MIN_POLL_INTERVAL_SECONDS * 1000, Math.round(intervalMs)),
+  );
   try {
     if (p === "darwin") {
-      startMacOSCollector(intervalMs);
+      startMacOSCollector(safeIntervalMs);
     } else if (p === "win32") {
-      startWindowsCollector(intervalMs);
+      startWindowsCollector(safeIntervalMs);
     } else {
       lastError = `Unsupported platform: ${p}`;
       return;

@@ -7,11 +7,12 @@ interface SliceData {
 interface Props {
   data: SliceData[];
   size?: number;
+  centerLabel?: string;
 }
 
 const PALETTE = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
 
-export function DonutChart({ data, size = 140 }: Props) {
+export function DonutChart({ data, size = 140, centerLabel }: Props) {
   if (data.length === 0) return null;
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total === 0) return null;
@@ -46,7 +47,7 @@ export function DonutChart({ data, size = 140 }: Props) {
         return slice;
       })}
       <text x={cx} y={cy - 4} textAnchor="middle" fontSize={18} fontWeight={600} fill="#1e293b">
-        {total > 1000 ? `${(total / 1000).toFixed(1)}k` : total}
+        {centerLabel ?? (total > 1000 ? `${(total / 1000).toFixed(1)}k` : total)}
       </text>
       <text x={cx} y={cy + 14} textAnchor="middle" fontSize={10} fill="#64748b">总计</text>
     </svg>

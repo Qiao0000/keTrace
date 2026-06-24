@@ -1,0 +1,89 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img "KeTrace" [ref=e6]
+      - generic [ref=e7]:
+        - generic [ref=e8]: 刻迹
+        - generic [ref=e9]: 日迹 · 论文 · 复盘
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - generic [ref=e12]: 今天
+        - strong [ref=e13]: 6月23日周二
+      - generic [ref=e14]: 本地
+    - navigation [ref=e15]:
+      - button "☀ 今日 一屏推进" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: ☀
+        - generic [ref=e18]:
+          - generic [ref=e19]: 今日
+          - generic [ref=e20]: 一屏推进
+      - button "◉ 活动 前台记录" [ref=e21] [cursor=pointer]:
+        - generic [ref=e22]: ◉
+        - generic [ref=e23]:
+          - generic [ref=e24]: 活动
+          - generic [ref=e25]: 前台记录
+      - button "☑ 任务 执行清单" [ref=e26] [cursor=pointer]:
+        - generic [ref=e27]: ☑
+        - generic [ref=e28]:
+          - generic [ref=e29]: 任务
+          - generic [ref=e30]: 执行清单
+      - button "◆ 论文 写作投稿" [ref=e31] [cursor=pointer]:
+        - generic [ref=e32]: ◆
+        - generic [ref=e33]:
+          - generic [ref=e34]: 论文
+          - generic [ref=e35]: 写作投稿
+      - button "▤ 报告 复盘模板" [active] [ref=e36] [cursor=pointer]:
+        - generic [ref=e37]: ▤
+        - generic [ref=e38]:
+          - generic [ref=e39]: 报告
+          - generic [ref=e40]: 复盘模板
+      - button "◎ 洞察 时间趋势" [ref=e41] [cursor=pointer]:
+        - generic [ref=e42]: ◎
+        - generic [ref=e43]:
+          - generic [ref=e44]: 洞察
+          - generic [ref=e45]: 时间趋势
+      - button "⚙ 设置 本地数据" [ref=e46] [cursor=pointer]:
+        - generic [ref=e47]: ⚙
+        - generic [ref=e48]:
+          - generic [ref=e49]: 设置
+          - generic [ref=e50]: 本地数据
+    - generic [ref=e51]:
+      - generic "橙粉" [ref=e52] [cursor=pointer]
+      - generic "薄荷" [ref=e53] [cursor=pointer]
+      - generic "珊瑚" [ref=e54] [cursor=pointer]
+      - generic "天空" [ref=e55] [cursor=pointer]
+      - generic "紫" [ref=e56] [cursor=pointer]
+      - generic "墨灰" [ref=e57] [cursor=pointer]
+    - generic [ref=e58]:
+      - strong [ref=e59]: 本地优先
+      - generic [ref=e60]: 数据仅存本机，报告默认保存为 Markdown。
+  - main [ref=e61]:
+    - generic [ref=e62]:
+      - heading "报告" [level=2] [ref=e178]
+      - button "◐ 自动" [ref=e66] [cursor=pointer]
+    - generic [ref=e179]:
+      - generic [ref=e180]:
+        - generic [ref=e181]:
+          - generic [ref=e182]: 生成报告
+          - generic [ref=e183]:
+            - button "日报" [ref=e184] [cursor=pointer]
+            - button "周报" [ref=e185] [cursor=pointer]
+            - button "月报" [ref=e186] [cursor=pointer]
+          - button "生成报告" [ref=e187] [cursor=pointer]
+          - generic [ref=e188]:
+            - checkbox "AI 摘要" [ref=e189]
+            - generic [ref=e190] [cursor=pointer]: AI 摘要
+        - generic [ref=e191]:
+          - generic [ref=e192]: 复盘模板
+          - generic [ref=e193]:
+            - button "日记" [ref=e194] [cursor=pointer]
+            - button "周记" [ref=e195] [cursor=pointer]
+            - button "月记" [ref=e196] [cursor=pointer]
+            - button "年记" [ref=e197] [cursor=pointer]
+          - button "保存模板" [disabled] [ref=e198]
+        - generic [ref=e199]:
+          - generic [ref=e200]: 历史报告 (0)
+          - generic [ref=e202]: 暂无
+      - generic [ref=e204]:
+        - generic [ref=e205]: ▤
+        - generic [ref=e206]: 生成报告或选择复盘模板
+        - generic [ref=e207]: 报告自动汇总数据，模板用于日、周、月、年复盘

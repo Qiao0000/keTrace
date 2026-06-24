@@ -1,5 +1,5 @@
 import { readActivityRange, computeAppDurations, loadWorkspace, loadConfig } from "../storage/jsonStore";
-import type { ActivityRecord, Task, ThesisLog, Submission, AppDuration } from "../../shared/types";
+import type { Task, ThesisLog, AppDuration, Workspace } from "../../shared/types";
 
 export interface DailyReportData {
   date: string;
@@ -42,7 +42,10 @@ export interface MonthlyReportData {
 
 // ─── Helpers ────────────────────────────────────────────
 function dateStr(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function daysAgo(n: number): string {
@@ -51,29 +54,58 @@ function daysAgo(n: number): string {
   return dateStr(d);
 }
 
-function tsInRange(ts: string, since: string, until: string): boolean {
-  return ts >= since && ts < until;
+function monthStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function isoInRange(iso: string, since: string, until: string): boolean {
-  return iso.slice(0, 10) >= since && iso.slice(0, 10) < until;
+function dateFromLocalString(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return new Date(value);
+  return new Date(year, month - 1, day);
+}
+
+function startOfLocalDayIso(value: string | Date): string {
+  const d = typeof value === "string" ? dateFromLocalString(value) : new Date(value);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+function endOfLocalDayIso(value: string | Date): string {
+  const d = typeof value === "string" ? dateFromLocalString(value) : new Date(value);
+  d.setHours(23, 59, 59, 999);
+  return d.toISOString();
+}
+
+function localDateFromIso(value: string | undefined): string {
+  if (!value) return "";
+  return dateStr(new Date(value));
+}
+
+function localMonthFromIso(value: string | undefined): string {
+  if (!value) return "";
+  return monthStr(new Date(value));
+}
+
+function allThesisLogs(ws: Workspace): ThesisLog[] {
+  if (ws.theses.length > 0) return ws.theses.flatMap((thesis) => thesis.logs);
+  return ws.thesis.logs;
 }
 
 // ─── Daily ──────────────────────────────────────────────
 export function gatherDailyReport(date?: string): DailyReportData {
   const d = date ?? dateStr(new Date());
-  const since = d + "T00:00:00.000Z";
-  const until = d + "T23:59:59.999Z";
+  const since = startOfLocalDayIso(d);
+  const until = endOfLocalDayIso(d);
 
   const activities = readActivityRange(since, until);
   const topApps = computeAppDurations(since, until);
   const totalSec = topApps.reduce((sum, a) => sum + a.seconds, 0);
 
   const ws = loadWorkspace();
-  const taskInRange = (t: Task) => t.createdAt.slice(0, 10) === d;
-  const taskDoneInRange = (t: Task) => t.doneAt?.slice(0, 10) === d;
+  const taskInRange = (t: Task) => localDateFromIso(t.createdAt) === d;
+  const taskDoneInRange = (t: Task) => localDateFromIso(t.doneAt) === d;
 
-  const thesisLogs = ws.thesis.logs.filter((l) => l.date === d);
+  const thesisLogs = allThesisLogs(ws).filter((l) => l.date === d);
   const thesisMin = thesisLogs.reduce((s, l) => s + l.minutes, 0);
   const thesisWords = thesisLogs.reduce((s, l) => s + (l.words ?? 0), 0);
 
@@ -102,23 +134,26 @@ export function gatherDailyReport(date?: string): DailyReportData {
 export function gatherWeeklyReport(weekEnd?: string): WeeklyReportData {
   const end = weekEnd ?? dateStr(new Date());
   const since = daysAgo(6); // last 7 days inclusive
-  const until = end + "T23:59:59.999Z";
+  const until = endOfLocalDayIso(end);
 
-  const topApps = computeAppDurations(since + "T00:00:00.000Z", until);
+  const topApps = computeAppDurations(startOfLocalDayIso(since), until);
   const totalSec = topApps.reduce((sum, a) => sum + a.seconds, 0);
 
   const dailyBreakdown: { date: string; seconds: number }[] = [];
   for (let i = 6; i >= 0; i--) {
     const dd = daysAgo(i);
-    const dayApps = computeAppDurations(dd + "T00:00:00.000Z", dd + "T23:59:59.999Z");
+    const dayApps = computeAppDurations(startOfLocalDayIso(dd), endOfLocalDayIso(dd));
     dailyBreakdown.push({ date: dd, seconds: dayApps.reduce((s, a) => s + a.seconds, 0) });
   }
 
   const ws = loadWorkspace();
-  const inWeek = (t: Task) => t.createdAt.slice(0, 10) >= since && t.createdAt.slice(0, 10) <= end;
-  const doneInWeek = (t: Task) => t.doneAt ? (t.doneAt.slice(0, 10) >= since && t.doneAt.slice(0, 10) <= end) : false;
+  const inWeek = (t: Task) => localDateFromIso(t.createdAt) >= since && localDateFromIso(t.createdAt) <= end;
+  const doneInWeek = (t: Task) => {
+    const doneDate = localDateFromIso(t.doneAt);
+    return doneDate >= since && doneDate <= end;
+  };
 
-  const thesisLogs = ws.thesis.logs.filter((l) => l.date >= since && l.date <= end);
+  const thesisLogs = allThesisLogs(ws).filter((l) => l.date >= since && l.date <= end);
   const thesisMin = thesisLogs.reduce((s, l) => s + l.minutes, 0);
   const thesisWords = thesisLogs.reduce((s, l) => s + (l.words ?? 0), 0);
 
@@ -138,21 +173,21 @@ export function gatherWeeklyReport(weekEnd?: string): WeeklyReportData {
 
 // ─── Monthly ────────────────────────────────────────────
 export function gatherMonthlyReport(month?: string): MonthlyReportData {
-  const m = month ?? new Date().toISOString().slice(0, 7);
-  const since = m + "-01T00:00:00.000Z";
+  const m = month ?? monthStr(new Date());
+  const since = startOfLocalDayIso(`${m}-01`);
   // compute last day of month
   const [y, mo] = m.split("-").map(Number);
   const lastDay = new Date(y, mo, 0).getDate();
-  const until = `${m}-${String(lastDay).padStart(2, "0")}T23:59:59.999Z`;
+  const until = endOfLocalDayIso(`${m}-${String(lastDay).padStart(2, "0")}`);
 
   const topApps = computeAppDurations(since, until);
   const totalSec = topApps.reduce((sum, a) => sum + a.seconds, 0);
 
   const ws = loadWorkspace();
-  const inMonth = (t: Task) => t.createdAt.slice(0, 7) === m;
-  const doneInMonth = (t: Task) => t.doneAt ? t.doneAt.slice(0, 7) === m : false;
+  const inMonth = (t: Task) => localMonthFromIso(t.createdAt) === m;
+  const doneInMonth = (t: Task) => localMonthFromIso(t.doneAt) === m;
 
-  const thesisLogs = ws.thesis.logs.filter((l) => l.date.slice(0, 7) === m);
+  const thesisLogs = allThesisLogs(ws).filter((l) => l.date.slice(0, 7) === m);
   const thesisMin = thesisLogs.reduce((s, l) => s + l.minutes, 0);
   const thesisWords = thesisLogs.reduce((s, l) => s + (l.words ?? 0), 0);
 
@@ -161,7 +196,7 @@ export function gatherMonthlyReport(month?: string): MonthlyReportData {
   for (let w = 0; w < 4; w++) {
     const wsDate = `${m}-${String(w * 7 + 1).padStart(2, "0")}`;
     const weDate = `${m}-${String(Math.min((w + 1) * 7, lastDay)).padStart(2, "0")}`;
-    const wApps = computeAppDurations(wsDate + "T00:00:00.000Z", weDate + "T23:59:59.999Z");
+    const wApps = computeAppDurations(startOfLocalDayIso(wsDate), endOfLocalDayIso(weDate));
     weeklyBreakdown.push({ week: `W${w + 1}`, seconds: wApps.reduce((s, a) => s + a.seconds, 0) });
   }
 

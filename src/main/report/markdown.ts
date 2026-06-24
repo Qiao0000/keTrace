@@ -40,7 +40,7 @@ function dailyMarkdown(date?: string): string {
     lines.push(`- 记录数: ${data.activityCount}`);
     lines.push(`- 追踪时长: ${fmtDuration(data.totalTrackedSeconds)}`);
     lines.push("");
-    lines.push("### 应用时长 Top 5");
+    lines.push("### 活动分类 Top 5");
     lines.push("");
     for (let i = 0; i < data.topApps.length; i++) {
       const a = data.topApps[i];
@@ -138,8 +138,8 @@ function weeklyMarkdown(weekEnd?: string): string {
   }
   lines.push("");
 
-  // Top apps
-  lines.push("## 高频应用");
+  // Top activity categories
+  lines.push("## 高频活动分类");
   lines.push("");
   for (let i = 0; i < Math.min(data.topApps.length, 5); i++) {
     const a = data.topApps[i];
@@ -185,8 +185,8 @@ function monthlyMarkdown(month?: string): string {
   }
   lines.push("");
 
-  // Top apps
-  lines.push("## 高频应用 Top 5");
+  // Top activity categories
+  lines.push("## 高频活动分类 Top 5");
   lines.push("");
   for (let i = 0; i < Math.min(data.topApps.length, 5); i++) {
     const a = data.topApps[i];
@@ -214,12 +214,29 @@ export function generateReportMarkdown(type: ReportType, options?: { date?: stri
   }
 }
 
+export function insertAiOverview(md: string, type: ReportType, summary: string): string {
+  const cleanSummary = summary.trim();
+  if (!cleanSummary) return md;
+
+  const title = type === "daily" ? "今日 AI 概括" : type === "weekly" ? "本周 AI 概括" : "本月 AI 概括";
+  const quote = cleanSummary
+    .split(/\n+/)
+    .map((line) => `> ${line.trim()}`)
+    .join("\n");
+  const block = `## ${title}\n\n${quote}\n\n`;
+  const titleBreak = md.indexOf("\n\n");
+
+  if (titleBreak < 0) return `${md}\n\n${block.trimEnd()}`;
+  return `${md.slice(0, titleBreak + 2)}${block}${md.slice(titleBreak + 2)}`;
+}
+
 export function generateReportHtml(md: string): string {
   // Escape user content first, then apply the small Markdown subset used by reports.
   const html = escapeHtml(md)
     .replace(/^### (.+)$/gm, "<h3>$1</h3>")
     .replace(/^## (.+)$/gm, "<h2>$1</h2>")
     .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+    .replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>")
     .replace(/^- (.+)$/gm, "<li>$1</li>")
     .replace(/^(\d+)\. (.+)$/gm, "<li>$2</li>")
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
@@ -229,16 +246,5 @@ export function generateReportHtml(md: string): string {
     .replace(/\n{2,}/g, "\n</p><p>\n")
     .replace(/\n/g, "<br>\n");
 
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head><meta charset="UTF-8"><title>刻迹报告</title>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1.5rem; line-height: 1.8; color: #1e293b; background: #fff; }
-  h1 { font-size: 1.5rem; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; }
-  h2 { font-size: 1.2rem; margin-top: 1.5rem; color: #334155; }
-  h3 { font-size: 1rem; color: #64748b; }
-  li { margin: 2px 0; }
-  p { margin: 0.5rem 0; }
-</style></head>
-<body><p>${html}</p></body></html>`;
+  return `<div class="report-preview-content"><div class="report-doc-brand"><span class="report-doc-logo">刻</span><span>刻迹 KeTrace</span></div><p>${html}</p></div>`;
 }

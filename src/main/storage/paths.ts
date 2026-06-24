@@ -15,6 +15,7 @@ export const DATA_DIR = getDataDir();
 export const ACTIVITY_STREAM = join(DATA_DIR, "activity_stream.jsonl");
 export const WORKSPACE_FILE = join(DATA_DIR, "workspace.json");
 export const CONFIG_FILE = join(DATA_DIR, "config.json");
+export const DATA_META_FILE = join(DATA_DIR, "meta.json");
 export const REPORTS_DIR = join(DATA_DIR, "reports");
 export const BACKUPS_DIR = join(DATA_DIR, "backups");
 
