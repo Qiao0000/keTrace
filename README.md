@@ -86,8 +86,7 @@ All data is stored locally by default. Nothing goes through any third-party serv
 
 | 快捷键 | 功能 |
 |--------|------|
-| `Cmd/Ctrl + K` | 全局聚焦快速记录栏（Spotlight） |
-| `单击 Ctrl` | macOS 原生触发快速输入窗口 |
+| `双击 Ctrl` | 全局输入框 |
 
 ## License
 
